@@ -222,7 +222,9 @@ class Trainer:
                         print(pf % ("Train", f'{self.epoch}/{self.epochs}', self.train_loss.item()))                 
                         del pbar
                     
-                        if self.scheduler: self.scheduler.step()
+                        if self.scheduler: 
+                            self.scheduler.step()
+                            print("Learning Rate : ", optimizer.state_dict()['param_groups'][0]['lr'])
 
                     # ############################################################Validation Loop
 
