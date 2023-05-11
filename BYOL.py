@@ -224,7 +224,7 @@ class Trainer:
                     
                         if self.scheduler: 
                             self.scheduler.step()
-                            print("Learning Rate : ", optimizer.state_dict()['param_groups'][0]['lr'])
+                            print("Learning Rate : ", self.optimizer.state_dict()['param_groups'][0]['lr'])
 
                     # ############################################################Validation Loop
 
