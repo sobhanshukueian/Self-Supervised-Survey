@@ -10,7 +10,7 @@ from utils import LARS
 from Barlow_model import BarlowTwins
 from BYOL_model import BYOLNetwork
 from BYOL_PA_model import BYOLPANetwork 
-from VSS_model import VSS
+# from VSS_model import VSS
 from configs import model_config
 
 
@@ -70,7 +70,6 @@ def get_model(name, conf, resume, save_dir="./", weights=None, device='cpu', ver
         print(f'Resume training from the checkpoint file :{checkpoint_path}')
         conf['resume'] = f'Resume training from the checkpoint file :{checkpoint_path}'
         ckpt = torch.load(checkpoint_path)
-
     elif weights:  
         print(f'Loading state_dict from {weights} for fine-tuning...')
         ckpt = torch.load(weights)

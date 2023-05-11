@@ -97,7 +97,7 @@ from matplotlib import pyplot as plt
 lr_list = []
 model = [torch.nn.Parameter(torch.randn(2, 2, requires_grad=True))]
 LR = 0.001
-optimizer = torch.optim.Adam(model,lr = LR, weight_decay=2e-5)
+optimizer = torch.optim.SGD(model, lr=0.4, momentum=0.9, weight_decay=0.00005, nesterov=True)
 scheduler = CosineAnnealingWarmupRestarts(optimizer,
                                           first_cycle_steps=50,
                                           cycle_mult=1.0,
@@ -106,13 +106,15 @@ scheduler = CosineAnnealingWarmupRestarts(optimizer,
                                           warmup_steps=30,
                                           gamma=0.8,
                                           last_epoch=-1)
-for epoch in range(0, 180):
+trained_epoch=0                                          
+for epoch in range(0, 47):
     data_size = 40
     for i in range(data_size):
         optimizer.zero_grad()
         optimizer.step()
     scheduler.step()
     lr_list.append(optimizer.state_dict()['param_groups'][0]['lr'])
+    trained_epoch=epoch                                          
 
 ckpt = {
     'optimizer': optimizer.state_dict(),
@@ -135,9 +137,9 @@ scheduler = CosineAnnealingWarmupRestarts(optimizer,
                                           min_lr=5e-5,
                                           warmup_steps=30,
                                           gamma=0.8,
-                                          last_epoch=180)
+                                          last_epoch=trained_epoch+1)
 
-for epoch in range(180, 260):
+for epoch in range(trained_epoch+1, 260):
     data_size = 40
     for i in range(data_size):
         optimizer.zero_grad()
