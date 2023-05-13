@@ -34,6 +34,7 @@ from configs import model_config
 from utils import LARS, off_diagonal, get_color, get_colors, get_params_groups, LinearClassifier
 from BYOL_model import BYOLNetwork
 from Barlow_model import BarlowTwins
+from main_utils import get_optimizer, get_model, eval_knn
 
 
 MODE = "barlow" #@param
