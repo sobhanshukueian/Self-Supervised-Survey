@@ -43,13 +43,17 @@ siamese_dataset = CustomCIFAR(contrast_transforms, True)
 siamese_val_dataset = CustomCIFAR(val_transformation, True)
 siamese_testset = CustomCIFAR(val_transformation, False)
 
+print(len(siamese_testset))
+print(len(siamese_dataset))
+
+
 # Load the training dataset
 train_dataloader = DataLoader(siamese_dataset, shuffle=False, num_workers=0, batch_size=model_config["batch_size"])
 # Load the training without training transforms dataset
 train_val_dataloader = DataLoader(siamese_val_dataset, shuffle=False, num_workers=0, batch_size=model_config["batch_size"])
 # Load the testing dataset
 test_dataloader = DataLoader(siamese_testset, shuffle=False, num_workers=0, batch_size=model_config["batch_size"])
-vis_dataloader = DataLoader(siamese_dataset, shuffle=True, num_workers=0, batch_size=model_config["show_batch_size"])
+# vis_dataloader = DataLoader(siamese_dataset, shuffle=True, num_workers=0, batch_size=model_config["show_batch_size"])
 
 
 

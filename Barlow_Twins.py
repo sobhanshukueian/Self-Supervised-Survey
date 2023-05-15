@@ -177,6 +177,7 @@ class Trainer:
         try:
             # training process prerequisite
             self.start_time = time.time()
+            self.conf["Time"] = time.ctime(self.start_time)
             print('Start Training Process \nTime: {}'.format(time.ctime(self.start_time)))
             self.scaler = amp.GradScaler(enabled=self.device != 'cpu')
             self.best_loss = np.inf

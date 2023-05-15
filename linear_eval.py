@@ -29,14 +29,13 @@ from sklearn.metrics import accuracy_score
 from sklearn.model_selection import cross_val_score
 
 
-from cifar_dataset import train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader
+from cifar_dataset import train_dataloader, train_val_dataloader, test_dataloader
 from vis import show_batch
 from configs import model_config
 from utils import LARS, off_diagonal, get_color, get_colors, get_params_groups, LinearClassifier, accuracy, compute_acc, save
 from BYOL_model import BYOLNetwork
 from Barlow_model import BarlowTwins
 from main_utils import get_optimizer, get_model, eval_knn
-
 
 MODE = "byol" #@param
 BATCH_SIZE = model_config['batch_size']
@@ -123,8 +122,6 @@ class Linear_Validator:
                                             warmup_steps=30,
                                             gamma=0.8,
                                             last_epoch=self.start_epoch if self.resume else -1)
-        
-        self.criterion = torch.nn.CrossEntropyLoss()
         # tensorboard
         
     
@@ -144,46 +141,36 @@ class Linear_Validator:
         with torch.no_grad():
             outputs = self.model(inputs)
 
-        with amp.autocast(enabled=self.device != 'cpu'):
-            # print(outputs.size())
-            outputs = self.linear_classifier(outputs)
-            # print(labels.size())
-
-            # outputs = torch.max(outputs, dim=1)[1]
-            # print(outputs.size())
-
-
-            loss = self.criterion(outputs, labels)
-
-        # state_dict_before = copy.deepcopy(self.model.state_dict())
+        outputs = self.linear_classifier(outputs)
+        loss = torch.nn.CrossEntropyLoss()(outputs, labels)
 
         self.optimizer.zero_grad()
         self.scaler.scale(loss).backward()
         self.scaler.step(self.optimizer)
         self.scaler.update()
-
-        # acc1, acc5 = accuracy(outputs, labels, topk=(1, 5))
         
-        # print('* Acc@1 {} Acc@5 {}'.format(acc1, acc5))
-        
-        return loss.cpu().detach().numpy(), outputs, labels
+        return loss.cpu().detach().numpy(), outputs.cpu().detach(), labels.cpu().detach()
 
 
     # Each Validation Step
     def val_step(self, batch_data):
-        self.model.eval()
+        self.linear_classifier.eval()
+
         inputs, labels = self.prepro_data(batch_data, self.device)
         outputs = self.model(inputs)
         outputs = self.linear_classifier(outputs)
-        loss = self.criterion(outputs, labels)
+        loss = torch.nn.CrossEntropyLoss()(outputs, labels)
 
-        return loss.cpu().detach().numpy(), outputs, labels
+        return loss.cpu().detach().numpy(), outputs.cpu().detach(), labels.cpu().detach()
 
     # Training Process
     def run(self):
         try:
+            torch.cuda.empty_cache()
+
             # training process prerequisite
             self.start_time = time.time()
+            self.conf["Time"] = time.ctime(self.start_time)
             print('Start Training Process \nTime: {}'.format(time.ctime(self.start_time)))
             self.scaler = amp.GradScaler(enabled=self.device != 'cpu')
             self.best_loss = np.inf
@@ -193,35 +180,29 @@ class Linear_Validator:
                 try:
                     self.conf["Trained_epoch"] = self.epoch
 
-                    train_predictions = torch.tensor([]).to(device)
-                    train_labels = torch.tensor([]).to(device)
+                    train_predictions = torch.tensor([])
+                    train_labels = torch.tensor([])
 
-                    validation_predictions = torch.tensor([]).to(device)
-                    validation_labels = torch.tensor([]).to(device)
+                    validation_predictions = torch.tensor([])
+                    validation_labels = torch.tensor([])
 
                     # ############################################################Train Loop
-                    # if self.epoch != 0:
                     # Training loop
-                    self.model.train(True)
+                    self.model.train(False)
+                    self.linear_classifier.train(True)
+
                     pbar = enumerate(self.train_loader)
                     pbar = tqdm(pbar, desc=('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss'), total=self.max_stepnum)
                     for step, batch_data in pbar:
                         self.train_loss, predictions, labels = self.train_step(batch_data)
                         
-                        train_predictions = torch.concat([train_predictions, predictions])
-                        train_labels = torch.concat([train_labels, labels])
+                        train_predictions = torch.cat([train_predictions, predictions], dim=0)
+                        train_labels = torch.cat([train_labels, labels], dim=0)
                         
-                        # train_predictions.extend(predictions)
-                        # train_labels.extend(labels)
                         self.train_losses.append(self.train_loss)
                         pf = '%20s' * 3 # print format
                     print(pf % ("Train", f'{self.epoch}/{self.epochs}', self.train_loss.item()))                 
                     del pbar
-
-                    acc1, acc5 = accuracy(train_predictions, train_labels, topk=(1, 5))
-                    print('* Acc@1 {} Acc@5 {}'.format(acc1, acc5))
-
-                    del train_predictions, train_labels
 
                     if self.scheduler: 
                         self.scheduler.step()
@@ -236,21 +217,15 @@ class Linear_Validator:
                     vbar = tqdm(vbar, desc=('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss'), total=len(self.valid_loader))
                     for step, batch_data in vbar:
                         self.val_loss, predictions, labels = self.val_step(batch_data)
-                        validation_predictions = torch.concat([validation_predictions, predictions])
-                        validation_labels = torch.concat([validation_labels, labels])
-                        # validation_predictions.extend(predictions)
-                        # validation_labels.extend(labels)
+                        
+                        validation_predictions = torch.cat([validation_predictions, predictions], dim=0)
+                        validation_labels = torch.cat([validation_labels, labels], dim=0)
+                        
                         if self.epoch != 0: self.val_losses.append(self.val_loss)
-                        # vbar.set_description(f"Epoch: {self.epoch}/{self.epochs}\tValidation Loss: {self.val_loss}  ")
                         pf = '%20s' * 3 # print format
                     print(pf % ("Validation", f'{self.epoch}/{self.epochs}', self.val_loss.item()))   
                     del vbar
                     # print(len(validation_predictions), len(validation_predictions[0]), len(validation_labels))
-
-                    acc1, acc5 = accuracy(validation_predictions, validation_labels, topk=(1, 5))
-                    print('* Acc@1 {} Acc@5 {}'.format(acc1, acc5))
-
-                    del validation_predictions, validation_labels
 
 
                     # PLot Losses
@@ -259,18 +234,23 @@ class Linear_Validator:
                     if self.val_loss < self.best_loss:
                         self.best_loss=self.val_loss
 
-                    # train_acc = compute_acc(train_predictions, train_labels)
-                    # validation_acc = compute_acc(validation_predictions, validation_labels)
-                    print("Train Accuracy: {}\nValidation Accuracy: {}".format(train_acc, validation_acc))
+                    acc1, acc5 = accuracy(train_predictions, train_labels, topk=(1, 5))
+                    print('Training Acc@1 {} Acc@5 {}'.format(acc1, acc5))
+                    acc1, acc5 = accuracy(validation_predictions, validation_labels, topk=(1, 5))
+                    print('Validation Acc@1 {} Acc@5 {}'.format(acc1, acc5))
+                    
+                    
+                    del train_predictions, train_labels
+                    del validation_predictions, validation_labels
 
                 except Exception as _:
                     print('ERROR in training steps.')
                     raise
-                try:
-                    save(conf=self.conf, save_dir=self.save_dir, model_name=self.model_name, model=self.linear_classifier, epoch=self.epoch, val_loss=self.val_loss, best_loss=self.best_loss, optimizer=self.optimizer)
-                except Exception as _:
-                    print('ERROR in evaluate and save model.')
-                    raise
+                # try:
+                #     # save(conf=self.conf, save_dir=self.save_dir, model_name=self.model_name, model=self.linear_classifier, epoch=self.epoch, val_loss=self.val_loss, best_loss=self.best_loss, optimizer=self.optimizer)
+                # except Exception as _:
+                #     print('ERROR in evaluate and save model.')
+                #     raise
         except Exception as _:
             print('ERROR in training loop or eval/save model.')
             raise
