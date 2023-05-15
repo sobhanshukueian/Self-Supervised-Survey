@@ -13,6 +13,7 @@ from tqdm import tqdm
 import matplotlib
 import matplotlib.pyplot as plt
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
+from utils import CosineAnnealingWarmupRestarts
 
 
 import torch
@@ -31,13 +32,13 @@ from sklearn.model_selection import cross_val_score
 from cifar_dataset import train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader
 from vis import show_batch
 from configs import model_config
-from utils import LARS, off_diagonal, get_color, get_colors, get_params_groups, LinearClassifier
+from utils import LARS, off_diagonal, get_color, get_colors, get_params_groups, LinearClassifier, accuracy, compute_acc, save
 from BYOL_model import BYOLNetwork
 from Barlow_model import BarlowTwins
 from main_utils import get_optimizer, get_model, eval_knn
 
 
-MODE = "barlow" #@param
+MODE = "byol" #@param
 BATCH_SIZE = model_config['batch_size']
 EPOCHS = model_config['EPOCHS']
 device = model_config['device']
@@ -49,12 +50,14 @@ MODEL_NAME = model_config['MODEL_NAME']
 WEIGHTS = model_config['WEIGHTS']
 OPTIMIZER = model_config['OPTIMIZER']
 KNN_EVALUATION_PERIOD = model_config['KNN_EVALUATION_PERIOD']
-
+RESUME = model_config['RESUME']
+RESUME_DIR = model_config["RESUME_DIR"]
+USE_SCHEDULER = model_config["USE_SCHEDULER"]
 
 
 class Linear_Validator:
     # -----------------------------------------------INITIALIZE TRAINING-------------------------------------------------------------
-    def __init__(self, device=device, epochs=EPOCHS, batch_size=BATCH_SIZE, save_dir=SAVE_DIR, train_loader=train_dataloader, valid_loader=test_dataloader, weights=WEIGHTS, verbose=VERBOSE, visualize_plots=VISUALIZE_PLOTS, save_plots=SAVE_PLOTS, model_name=MODEL_NAME, mode=MODE):
+    def __init__(self, device=device, epochs=EPOCHS, batch_size=BATCH_SIZE, save_dir=SAVE_DIR, train_loader=train_dataloader, valid_loader=test_dataloader, weights=WEIGHTS, verbose=VERBOSE, visualize_plots=VISUALIZE_PLOTS, save_plots=SAVE_PLOTS, model_name=MODEL_NAME, resume=RESUME, resume_dir=RESUME_DIR, use_scheduler = USE_SCHEDULER, mode=MODE):
         self.device = device
         self.save_dir = save_dir
         self.batch_size = batch_size
@@ -70,6 +73,12 @@ class Linear_Validator:
         self.val_losses=[]
         self.conf = {'Name' : self.model_name, 'Bacth_size' : self.batch_size, 'Max_iter_num' : '', 'Epochs' : self.epochs, 'Trained_epoch' : 0, 'Optimizer' : '', "Model" : '', 'Parameter_size' : ''}
         self.mode = mode
+        self.ckpt = False
+        self.resume = resume
+        self.resume_dir = resume_dir
+        self.start_epoch = 0
+        self.use_scheduler = use_scheduler
+        self.scheduler = False
 
         temm=0
         tmp_save_dir = self.save_dir
@@ -87,70 +96,41 @@ class Linear_Validator:
         self.conf["Max_iter_num"] = self.max_stepnum
         
         # get model 
-        self.model, self.linear_classifier = self.get_model()
+        self.model, self.conf, self.ckpt = get_model(self.mode, self.conf, self.resume, self.resume_dir, self.weights, self.verbose)
+        self.model = self.model.to(device)
+        self.model.eval()
+
+        self.linear_classifier = LinearClassifier(model_config["EMBEDDING_SIZE"])
+        self.linear_classifier = self.linear_classifier.to(device)
+
         if self.verbose > 2:
             self.count_parameters()
 
         # Get optimizer
-        self.optimizer = self.get_optimizer()
+        self.optimizer, self.conf = get_optimizer(self.linear_classifier.parameters(), self.conf, self.resume, self.ckpt, optimizer=OPTIMIZER, lr0=model_config["LEARNING_RATE"], momentum=model_config["MOMENTUM"], weight_decay=model_config["WEIGHT_DECAY"], verbose=self.verbose)
+        
+        if self.resume:
+            self.start_epoch = self.ckpt["epoch"] + 1
+            self.conf['resume'] += f" from epoch {self.start_epoch}"
+        
+        
+        if self.use_scheduler:
+            self.scheduler = CosineAnnealingWarmupRestarts(self.optimizer,
+                                            first_cycle_steps=50,
+                                            cycle_mult=1.0,
+                                            max_lr=model_config["LEARNING_RATE"],
+                                            min_lr=5e-5,
+                                            warmup_steps=30,
+                                            gamma=0.8,
+                                            last_epoch=self.start_epoch if self.resume else -1)
+        
+        self.criterion = torch.nn.CrossEntropyLoss()
+        # tensorboard
+        
     
         # tensorboard
         # self.tblogger = SummaryWriter(self.save_dir) 
 
-# ----------------------------------------------------INITIALIZERS-------------------------------------------------------------------------
-    # Get Model 
-    def get_model(self):
-        if self.mode == 'byol':
-            model = BYOLNetwork().to(self.device)
-            if self.weights:  
-                print(f'Loading state_dict from {self.weights} for fine-tuning...')
-                model.load_state_dict(torch.load(self.weights))
-        if self.mode == 'barlow':
-            model = BarlowTwins().to(self.device)
-            if self.weights:  
-                print(f'Loading state_dict from {self.weights} for fine-tuning...')
-                model.load_state_dict(torch.load(self.weights))
-        elif self.mode == 'supervised':
-            model = torchvision.models.resnet18(pretrained=True)
-            model.fc = nn.Sequential(
-                nn.Linear(model_config["HIDDEN_SIZE"], model_config["EMBEDDING_SIZE"])
-                )
-            model = model.to(device)
-
-        model.eval()
-        linear_classifier = LinearClassifier(model_config["EMBEDDING_SIZE"])
-        linear_classifier = linear_classifier.cuda()
-        return model, linear_classifier
-
-    def get_optimizer(self, optimizer="SGD", lr0=0.0008, momentum=0.9):
-        assert optimizer == 'SGD' or 'Adam' or 'LARS', 'ERROR: unknown optimizer, use SGD defaulted'
-        if optimizer == 'SGD':
-            optim = torch.optim.SGD(self.linear_classifier.parameters(), lr=lr0, momentum=momentum, nesterov=True)
-        elif optimizer == 'Adam':
-            optim = torch.optim.Adam(self.linear_classifier.parameters(), lr=lr0, weight_decay=1e-6)
-
-        if self.verbose > 1:
-            print(f"{'optimizer:'} {type(optim).__name__}")
-        self.conf['Optimizer'] = f"{'optimizer:'} {type(optim).__name__}"
-        return optim
-
-    # Loss Function Definition
-    def compute_loss(self, predictions, labels):
-        criterion = torch.nn.CrossEntropyLoss()
-        loss = criterion(predictions, labels)
-        return loss
-    
-    def count_parameters(self):
-        table = PrettyTable(["Modules", "Parameters"])
-        total_params = 0
-        for name, parameter in self.model.named_parameters():
-            if not parameter.requires_grad: continue
-            params = parameter.numel()
-            table.add_row([name, params])
-            total_params+=params
-        print(table)
-        print(f"Total Trainable Params: {total_params}")
-        self.conf["Parameter_size"] = total_params
 # -------------------"------------------------------------------------------------TRAINING PROCESS-----------------------------------------------
     @staticmethod
     def prepro_data(batch_data, device):
@@ -161,8 +141,10 @@ class Linear_Validator:
     # Each Train Step
     def train_step(self, batch_data):
         inputs, labels = self.prepro_data(batch_data, self.device)
-        with amp.autocast(enabled=self.device != 'cpu'):
+        with torch.no_grad():
             outputs = self.model(inputs)
+
+        with amp.autocast(enabled=self.device != 'cpu'):
             # print(outputs.size())
             outputs = self.linear_classifier(outputs)
             # print(labels.size())
@@ -171,7 +153,7 @@ class Linear_Validator:
             # print(outputs.size())
 
 
-            loss = self.compute_loss(outputs, labels)
+            loss = self.criterion(outputs, labels)
 
         # state_dict_before = copy.deepcopy(self.model.state_dict())
 
@@ -180,7 +162,11 @@ class Linear_Validator:
         self.scaler.step(self.optimizer)
         self.scaler.update()
 
-        return loss.cpu().detach().numpy(), outputs.cpu().detach().numpy(), labels.cpu().detach().numpy()
+        # acc1, acc5 = accuracy(outputs, labels, topk=(1, 5))
+        
+        # print('* Acc@1 {} Acc@5 {}'.format(acc1, acc5))
+        
+        return loss.cpu().detach().numpy(), outputs, labels
 
 
     # Each Validation Step
@@ -189,9 +175,9 @@ class Linear_Validator:
         inputs, labels = self.prepro_data(batch_data, self.device)
         outputs = self.model(inputs)
         outputs = self.linear_classifier(outputs)
-        loss = self.compute_loss(outputs, labels)
+        loss = self.criterion(outputs, labels)
 
-        return loss.cpu().detach().numpy(), outputs.cpu().detach().numpy(), labels.cpu().detach().numpy()
+        return loss.cpu().detach().numpy(), outputs, labels
 
     # Training Process
     def run(self):
@@ -207,11 +193,11 @@ class Linear_Validator:
                 try:
                     self.conf["Trained_epoch"] = self.epoch
 
-                    train_predictions = []
-                    train_labels = []
+                    train_predictions = torch.tensor([]).to(device)
+                    train_labels = torch.tensor([]).to(device)
 
-                    validation_predictions = []
-                    validation_labels = []
+                    validation_predictions = torch.tensor([]).to(device)
+                    validation_labels = torch.tensor([]).to(device)
 
                     # ############################################################Train Loop
                     # if self.epoch != 0:
@@ -221,13 +207,25 @@ class Linear_Validator:
                     pbar = tqdm(pbar, desc=('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss'), total=self.max_stepnum)
                     for step, batch_data in pbar:
                         self.train_loss, predictions, labels = self.train_step(batch_data)
-                        train_predictions.extend(predictions)
-                        train_labels.extend(labels)
+                        
+                        train_predictions = torch.concat([train_predictions, predictions])
+                        train_labels = torch.concat([train_labels, labels])
+                        
+                        # train_predictions.extend(predictions)
+                        # train_labels.extend(labels)
                         self.train_losses.append(self.train_loss)
                         pf = '%20s' * 3 # print format
                     print(pf % ("Train", f'{self.epoch}/{self.epochs}', self.train_loss.item()))                 
                     del pbar
 
+                    acc1, acc5 = accuracy(train_predictions, train_labels, topk=(1, 5))
+                    print('* Acc@1 {} Acc@5 {}'.format(acc1, acc5))
+
+                    del train_predictions, train_labels
+
+                    if self.scheduler: 
+                        self.scheduler.step()
+                    print("Learning Rate : ", self.optimizer.state_dict()['param_groups'][0]['lr'])
 
 
                     # ############################################################Validation Loop
@@ -238,14 +236,21 @@ class Linear_Validator:
                     vbar = tqdm(vbar, desc=('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss'), total=len(self.valid_loader))
                     for step, batch_data in vbar:
                         self.val_loss, predictions, labels = self.val_step(batch_data)
-                        validation_predictions.extend(predictions)
-                        validation_labels.extend(labels)
+                        validation_predictions = torch.concat([validation_predictions, predictions])
+                        validation_labels = torch.concat([validation_labels, labels])
+                        # validation_predictions.extend(predictions)
+                        # validation_labels.extend(labels)
                         if self.epoch != 0: self.val_losses.append(self.val_loss)
                         # vbar.set_description(f"Epoch: {self.epoch}/{self.epochs}\tValidation Loss: {self.val_loss}  ")
                         pf = '%20s' * 3 # print format
-                    print(pf % ("Train Validation", f'{self.epoch}/{self.epochs}', self.val_loss.item()))   
+                    print(pf % ("Validation", f'{self.epoch}/{self.epochs}', self.val_loss.item()))   
                     del vbar
                     # print(len(validation_predictions), len(validation_predictions[0]), len(validation_labels))
+
+                    acc1, acc5 = accuracy(validation_predictions, validation_labels, topk=(1, 5))
+                    print('* Acc@1 {} Acc@5 {}'.format(acc1, acc5))
+
+                    del validation_predictions, validation_labels
 
 
                     # PLot Losses
@@ -254,16 +259,15 @@ class Linear_Validator:
                     if self.val_loss < self.best_loss:
                         self.best_loss=self.val_loss
 
-                    train_acc = self.compute_acc(train_predictions, train_labels)
-                    validation_acc = self.compute_acc(validation_predictions, validation_labels)
+                    # train_acc = compute_acc(train_predictions, train_labels)
+                    # validation_acc = compute_acc(validation_predictions, validation_labels)
                     print("Train Accuracy: {}\nValidation Accuracy: {}".format(train_acc, validation_acc))
 
-            
                 except Exception as _:
                     print('ERROR in training steps.')
                     raise
                 try:
-                    self.save()
+                    save(conf=self.conf, save_dir=self.save_dir, model_name=self.model_name, model=self.linear_classifier, epoch=self.epoch, val_loss=self.val_loss, best_loss=self.best_loss, optimizer=self.optimizer)
                 except Exception as _:
                     print('ERROR in evaluate and save model.')
                     raise
@@ -274,14 +278,6 @@ class Linear_Validator:
             finish_time = time.time()
             print(f'\nTraining completed in {time.ctime(finish_time)} \nIts Done in: {(time.time() - self.start_time) / 3600:.3f} hours.') 
     # -------------------------------------------------------Training Callback after each epoch--------------------------
-    def compute_acc(self, predicted, labels):
-        # print(predicted.size(), labels.size())
-        predicted = np.argmax(predicted, 1)  
-        correct = (predicted == labels).sum().item() 
-        total = len(labels)
-        return (100 * correct / total)
-
-
     def plot_loss(self, train_mean_size=1, val_mean_size=1):
         COLS=3
         ROWS=1

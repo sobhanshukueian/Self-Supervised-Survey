@@ -9,6 +9,7 @@ from copy import deepcopy
 from prettytable import PrettyTable
 from torch.optim.lr_scheduler import _LRScheduler
 import math
+import numpy as np
 
 
 
@@ -146,10 +147,10 @@ def count_parameters(model, conf):
 
 def save(conf, save_dir, model_name, model, epoch, val_loss, best_loss, optimizer):
     # create config object
-    conf = json.dumps(conf)
-    f = open(save_dir + "/config.json","w")
-    f.write(conf)
-    f.close()
+    # conf = json.dumps(conf)
+    # f = open(save_dir + "/config.json","w")
+    # f.write(conf)
+    # f.close()
 
     # save model
     save_ckpt_dir = osp.join(save_dir, 'weights')
@@ -254,3 +255,10 @@ class CosineAnnealingWarmupRestarts(_LRScheduler):
         self.last_epoch = math.floor(epoch)
         for param_group, lr in zip(self.optimizer.param_groups, self.get_lr()):
             param_group['lr'] = lr
+
+def compute_acc(predicted, labels):
+    # print(predicted.size(), labels.size())
+    predicted = np.argmax(predicted, 1)  
+    correct = (predicted == labels).sum().item() 
+    total = len(labels)
+    return (100 * correct / total)

@@ -21,7 +21,7 @@ from sklearn.model_selection import cross_val_score
 def get_optimizer(model_parameters, conf, resume, ckpt, optimizer="LARS", lr0=0.001, momentum=0.937, weight_decay=0.00005, verbose=1):
     assert optimizer == 'SGD' or 'Adam' or 'LARS', 'ERROR: unknown optimizer, use SGD defaulted'
     if optimizer == 'SGD':
-        optim = torch.optim.SGD(model_parameters, lr=lr0, momentum=momentum, weight_decay=weight_decay, nesterov=True)
+        optim = torch.optim.SGD(model_parameters, lr=lr0, momentum=momentum, weight_decay=weight_decay)
     elif optimizer == 'Adam':
         optim = torch.optim.Adam(model_parameters, lr=lr0, weight_decay=1e-6)
     elif optimizer == 'AdamW':
@@ -50,13 +50,18 @@ def get_optimizer(model_parameters, conf, resume, ckpt, optimizer="LARS", lr0=0.
 def get_model(name, conf, resume, save_dir="./", weights=None, device='cpu', verbose=1):
     if name == "barlow":
         # Get Model Archutecture From Model Class.
-        model = BarlowTwins().to(device)
+        model = BarlowTwins()
     elif name == "byol":
         model = BYOLNetwork()
     elif name == "byol-pa":
-        model = BYOLPANetwork().to(device)
+        model = BYOLPANetwork()
     elif name == "VSS":
-        model = VSS().to(device)
+        model = VSS()
+    elif name == "supervised":
+        model = torchvision.models.resnet50(pretrained=True)
+        model.fc = nn.Sequential(
+            nn.Linear(model_config["HIDDEN_SIZE"], model_config["EMBEDDING_SIZE"])
+        )
     else:
         assert "Unknown Network name"
 
