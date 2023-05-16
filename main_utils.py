@@ -6,6 +6,9 @@ import os.path as osp
 import matplotlib
 import matplotlib.pyplot as plt
 
+import torchvision
+import torch.nn as nn
+
 from utils import LARS
 from Barlow_model import BarlowTwins
 from BYOL_model import BYOLNetwork
@@ -58,10 +61,9 @@ def get_model(name, conf, resume, save_dir="./", weights=None, device='cpu', ver
     elif name == "VSS":
         model = VSS()
     elif name == "supervised":
-        model = torchvision.models.resnet50(pretrained=True)
-        model.fc = nn.Sequential(
-            nn.Linear(model_config["HIDDEN_SIZE"], model_config["EMBEDDING_SIZE"])
-        )
+        model = torchvision.models.resnet50(pretrained=True, num_classes=model_config["EMBEDDING_SIZE"])
+    elif name == "random":
+        model = torchvision.models.resnet50(pretrained=False, num_classes=model_config["EMBEDDING_SIZE"])
     else:
         assert "Unknown Network name"
 

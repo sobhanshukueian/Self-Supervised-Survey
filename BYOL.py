@@ -29,7 +29,8 @@ from vis import show_batch
 from configs import model_config
 from utils import LARS, off_diagonal, get_color, get_colors, count_parameters, save
 from BYOL_model import BYOLNetwork, byol_loss
-from main_utils import get_optimizer, get_model, eval_knn
+from main_utils import get_optimizer, get_model
+from knn_eval import knn_monitor
 
 
 def reproducibility(SEED):
@@ -40,10 +41,6 @@ def reproducibility(SEED):
     if torch.cuda.is_available():
         torch.cuda.manual_seed(SEED)
 reproducibility(666)
-
-
-if model_config["show_batch"]:
-    show_batch(vis_dataloader)
 
 
 BATCH_SIZE = model_config['batch_size']
@@ -134,15 +131,22 @@ class Trainer:
 
 # -------------------------------------------------------------------------------TRAINING PROCESS-----------------------------------------------
     @staticmethod
-    def prepro_data(batch_data, device):
-        images1 = batch_data[0].to(device)
-        images2 = batch_data[1].to(device) 
-        targets = batch_data[2].to(device)
-        return images1, images2, targets
+    def prepro_data(batch_data, device, train):
+        if train:
+        # images1 = batch_data[0][0].to(device)
+        # images2 = batch_data[1].to(device) 
+        # targets = batch_data[2].to(device)
+            (images1, images2), targets = batch_data
+            images2=images2.to(device)
+        else:
+            images1, targets = batch_data
+            images2=None
+            
+        return images1.to(device), images2, targets.to(device)
 
     # Each Train Step
     def train_step(self, batch_data):
-        image1, image2, targets = self.prepro_data(batch_data, self.device)
+        image1, image2, targets = self.prepro_data(batch_data, self.device, True)
         with amp.autocast(enabled=self.device != 'cpu'):
             preds = self.model(image1, image2)
             loss = (byol_loss(preds[0], preds[2]) + byol_loss(preds[1], preds[3])).mean()
@@ -184,7 +188,7 @@ class Trainer:
     # Each Validation Step
     def val_step(self, batch_data):
         self.model.eval()
-        image1, image2, targets = self.prepro_data(batch_data, self.device)
+        image1, image2, targets = self.prepro_data(batch_data, self.device, False)
 
         # forward
         preds = self.model(image1, image2)
@@ -209,92 +213,71 @@ class Trainer:
                     self.conf["Trained_epoch"] = self.epoch
 
                     # ############################################################Train Loop
-                    if self.epoch != 0:
-                        # Training loop
-                        self.model.train(True)
-                        pbar = enumerate(self.train_loader)
-                        # pbar = tqdm(pbar, total=self.max_stepnum)
-                        pbar = tqdm(pbar, desc=('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss'), total=self.max_stepnum)                        
-                        for step, batch_data in pbar:
-                            self.train_loss = self.train_step(batch_data)
-                            self.train_losses.append(self.train_loss)
-                            # pbar.set_description(f"Epoch: {self.epoch}/{self.epochs}\tTrain Loss: {self.train_loss}  ")                 
-                            pf = '%20s' * 3 # print format
-                        print(pf % ("Train", f'{self.epoch}/{self.epochs}', self.train_loss.item()))                 
-                        del pbar
-                    
-                        if self.scheduler: 
-                            self.scheduler.step()
-                            print("Learning Rate : ", self.optimizer.state_dict()['param_groups'][0]['lr'])
+                    # Training loop
+                    self.model.train(True)
+                    pbar = enumerate(self.train_loader)
+                    # pbar = tqdm(pbar, total=self.max_stepnum)
+                    pbar = tqdm(pbar, desc=('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss'), total=self.max_stepnum)                        
+                    for step, batch_data in pbar:
+                        self.train_loss = self.train_step(batch_data)
+                        self.train_losses.append(self.train_loss)
+                        # pbar.set_description(f"Epoch: {self.epoch}/{self.epochs}\tTrain Loss: {self.train_loss}  ")                 
+                        pf = '%20s' * 3 # print format
+                    print(pf % ("Train", f'{self.epoch}/{self.epochs}', self.train_loss.item()))                 
+                    del pbar
+                
+                    if self.scheduler: 
+                        self.scheduler.step()
+                        print("Learning Rate : ", self.optimizer.state_dict()['param_groups'][0]['lr'])
 
                     # ############################################################Validation Loop
 
-                    labels = []
-                    embeddings = []
-                    val_labels = []
-                    val_embeddings = []
-                    
+                    #     del vbar
+                    if self.epoch % KNN_EVALUATION_PERIOD == 0 : 
+                        labels = []
+                        embeddings = []
+                        val_labels = []
+                        val_embeddings = []
 
-
-                    if self.epoch % KNN_EVALUATION_PERIOD == 0:
-                        # Train Validation Loop
-                        vbar = enumerate(self.train_val_loader)
-                        # vbar = tqdm(vbar, total=len(self.train_val_loader))
-                        vbar = tqdm(vbar, desc=('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss'), total=len(self.train_val_loader))
-
+                        # Validation Loop
+                        vbar = enumerate(self.valid_loader)
+                        # vbar = tqdm(vbar, total=len(self.valid_loader))
+                        vbar = tqdm(vbar, desc=('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss'), total=len(self.valid_loader))
                         for step, batch_data in vbar:
                             self.val_loss, val_embedss, val_targets, val_embeds = self.val_step(batch_data)
-                            # vbar.set_description(f"Epoch: {self.epoch}/{self.epochs}\tTrain Validation Loss: {self.val_loss}  ")
-                            embeddings.extend(val_embeds)
-                            labels.extend(val_targets)
+                            if self.epoch != 0: self.val_losses.append(self.val_loss)
+                            # vbar.set_description(f"Epoch: {self.epoch}/{self.epochs}\tValidation Loss: {self.val_loss}  ")
+                            val_embeddings.extend(val_embeds)
+                            val_labels.extend(val_targets)
                             pf = '%20s' * 3 # print format
-                        print(pf % ("Train Validation", f'{self.epoch}/{self.epochs}', self.val_loss.item()))
-                       
+                        print(pf % ("Validation", f'{self.epoch}/{self.epochs}', self.val_loss.item()))
                         del vbar
 
-                    # Validation Loop
-                    vbar = enumerate(self.valid_loader)
-                    # vbar = tqdm(vbar, total=len(self.valid_loader))
-                    vbar = tqdm(vbar, desc=('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss'), total=len(self.valid_loader))
-                    for step, batch_data in vbar:
-                        self.val_loss, val_embedss, val_targets, val_embeds = self.val_step(batch_data)
-                        if self.epoch != 0: self.val_losses.append(self.val_loss)
-                        # vbar.set_description(f"Epoch: {self.epoch}/{self.epochs}\tValidation Loss: {self.val_loss}  ")
-                        val_embeddings.extend(val_embeds)
-                        val_labels.extend(val_targets)
-                        pf = '%20s' * 3 # print format
-                    print(pf % ("Validation", f'{self.epoch}/{self.epochs}', self.val_loss.item()))
-                    del vbar
+                        # PLot Losses
+                        if self.epoch != 0: self.plot_loss()
 
+                        # PLot Embeddings
+                        # plot_size = BATCH_SIZE
+                        self.plot_embeddings(np.array(val_embeddings), np.array(val_labels), 0)
 
-                    # PLot Losses
-                    if self.epoch != 0: self.plot_loss()
-
-                    # PLot Embeddings
-                    # plot_size = BATCH_SIZE
-                    self.plot_embeddings(np.array(val_embeddings), np.array(val_labels), 0)
-
-                    if self.epoch % KNN_EVALUATION_PERIOD == 0 : 
-                        knn_acc = eval_knn(embeddings, labels, knns)
+                        knn_acc = knn_monitor(self.model.online, train_val_dataloader, test_dataloader, self.epoch, k=200, hide_progress=False)
                         knns.append(knn_acc)
 
-                    # # Delete Data after PLotting
-                    del val_embeddings, val_labels, embeddings, labels
-                    
-                    if self.val_loss < self.best_loss:
-                        self.best_loss=self.val_loss
+                        # # Delete Data after PLotting
+                        # del val_embeddings, val_labels, embeddings, labels
+                        
+                        if self.val_loss < self.best_loss:
+                            self.best_loss=self.val_loss
+                        
+                        save(conf=self.conf, save_dir=self.save_dir, model_name=self.model_name, model=self.model, epoch=self.epoch, val_loss=self.val_loss, best_loss=self.best_loss, optimizer=self.optimizer)
 
-                    print("\n-----------------------------------------------\n")
+                        print("\n---------------------------------------------------\n")
 
             
                 except Exception as _:
                     print('ERROR in training steps.')
                     raise
-                try:
-                    save(conf=self.conf, save_dir=self.save_dir, model_name=self.model_name, model=self.model, epoch=self.epoch, val_loss=self.val_loss, best_loss=self.best_loss, optimizer=self.optimizer)
-                except Exception as _:
-                    print('ERROR in evaluate and save model.')
-                    raise
+
         except Exception as _:
             print('ERROR in training loop or eval/save model.')
             raise

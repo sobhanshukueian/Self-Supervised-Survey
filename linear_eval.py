@@ -37,7 +37,7 @@ from BYOL_model import BYOLNetwork
 from Barlow_model import BarlowTwins
 from main_utils import get_optimizer, get_model, eval_knn
 
-MODE = "byol" #@param
+MODE = "random" #@param
 BATCH_SIZE = model_config['batch_size']
 EPOCHS = model_config['EPOCHS']
 device = model_config['device']
@@ -56,7 +56,7 @@ USE_SCHEDULER = model_config["USE_SCHEDULER"]
 
 class Linear_Validator:
     # -----------------------------------------------INITIALIZE TRAINING-------------------------------------------------------------
-    def __init__(self, device=device, epochs=EPOCHS, batch_size=BATCH_SIZE, save_dir=SAVE_DIR, train_loader=train_dataloader, valid_loader=test_dataloader, weights=WEIGHTS, verbose=VERBOSE, visualize_plots=VISUALIZE_PLOTS, save_plots=SAVE_PLOTS, model_name=MODEL_NAME, resume=RESUME, resume_dir=RESUME_DIR, use_scheduler = USE_SCHEDULER, mode=MODE):
+    def __init__(self, device=device, epochs=EPOCHS, batch_size=BATCH_SIZE, save_dir=SAVE_DIR, train_loader=train_val_dataloader, valid_loader=test_dataloader, weights=WEIGHTS, verbose=VERBOSE, visualize_plots=VISUALIZE_PLOTS, save_plots=SAVE_PLOTS, model_name=MODEL_NAME, resume=RESUME, resume_dir=RESUME_DIR, use_scheduler = USE_SCHEDULER, mode=MODE):
         self.device = device
         self.save_dir = save_dir
         self.batch_size = batch_size
@@ -131,13 +131,14 @@ class Linear_Validator:
 # -------------------"------------------------------------------------------------TRAINING PROCESS-----------------------------------------------
     @staticmethod
     def prepro_data(batch_data, device):
-        inputs, _, labels = batch_data[0].to(device), batch_data[1].to(device), batch_data[2].to(device)
+        inputs, labels = batch_data
         labels = labels.view(-1)
         return inputs.to(device), labels.to(device)
 
     # Each Train Step
     def train_step(self, batch_data):
         inputs, labels = self.prepro_data(batch_data, self.device)
+        # print(inputs.size())
         with torch.no_grad():
             outputs = self.model(inputs)
 
