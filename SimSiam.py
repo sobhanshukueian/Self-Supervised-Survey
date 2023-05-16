@@ -331,7 +331,7 @@ class Trainer:
                         # plot_size = BATCH_SIZE
                         # self.plot_embeddings(np.array(val_embeddings), np.array(val_labels), 0)
 
-                        knn_acc = knn_monitor(self.model.backbone, train_val_dataloader, test_dataloader, self.epoch, k=200, hide_progress=False)
+                        knn_acc = knn_monitor(self.model.backbone, self.train_val_loader, self.valid_loader, self.epoch, k=200, hide_progress=False)
                         knns.append(knn_acc)
 
                         # # Delete Data after PLotting
