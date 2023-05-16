@@ -42,11 +42,11 @@ class BYOLNetwork(nn.Module):
         proj = self.get_cnn_block(in_features, embedding_size, hidden_size=hidden_size, batch_norm_mlp=batch_norm_mlp)
         return nn.Sequential(self.backbone, proj)
 
-    # @torch.no_grad()
-    # def update_moving_average(self):
-    #     for online_params, target_params in zip(self.online.parameters(), self.target.parameters()):
-    #         old_weight, up_weight = target_params.data, online_params.data
-    #         target_params.data = self.ema.update_average(old_weight, up_weight)
+    @torch.no_grad()
+    def update_moving_average(self):
+        for online_params, target_params in zip(self.online.parameters(), self.target.parameters()):
+            old_weight, up_weight = target_params.data, online_params.data
+            target_params.data = self.ema.update_average(old_weight, up_weight)
 
 
     def forward(self, x1, x2=None, return_embedding=False):
