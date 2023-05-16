@@ -3,7 +3,7 @@ import torch
 # # BYOL Config
 model_config = dict(
     batch_size=512,
-    show_batch=True,
+    show_batch=False,
     show_batch_size=10,
     EPOCHS = 800,
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu',
@@ -20,7 +20,7 @@ model_config = dict(
     RESUME = False,
     RESUME_DIR= "/content/drive/MyDrive/byol/run",
     MOMENTUM=0.9,
-    LEARNING_RATE=2,
+    LEARNING_RATE=0.06,
     WEIGHT_DECAY = 0.00005,
     USE_SCHEDULER = True
 )
