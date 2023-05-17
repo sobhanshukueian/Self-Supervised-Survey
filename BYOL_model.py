@@ -7,7 +7,6 @@ import torch.nn.functional as F
 import copy
 from utils import EMA
 
-
 #create the Siamese Neural Network
 class BYOLNetwork(nn.Module):
 
@@ -47,7 +46,12 @@ class BYOLNetwork(nn.Module):
         for online_params, target_params in zip(self.online.parameters(), self.target.parameters()):
             old_weight, up_weight = target_params.data, online_params.data
             target_params.data = self.ema.update_average(old_weight, up_weight)
-
+    def byol_loss(self, x, y):
+        # L2 normalization
+        x = F.normalize(x, dim=-1, p=2)
+        y = F.normalize(y, dim=-1, p=2)
+        loss = 2 - 2 * (x * y).sum(dim=-1)
+        return loss
 
     def forward(self, x1, x2=None, return_embedding=False):
         if return_embedding or (x2 is None):
@@ -66,11 +70,6 @@ class BYOLNetwork(nn.Module):
             x2_1 = self.target(x1).detach_()
             x2_2 = self.target(x2).detach_()
 
-        return x1_1_pred, x1_2_pred, x2_1, x2_2
+        loss = (self.byol_loss(x1_1_pred, x2_1) + self.byol_loss(x1_2_pred, x2_2)).mean()
 
-def byol_loss(x, y):
-    # L2 normalization
-    x = F.normalize(x, dim=-1, p=2)
-    y = F.normalize(y, dim=-1, p=2)
-    loss = 2 - 2 * (x * y).sum(dim=-1)
-    return loss
+        return loss
