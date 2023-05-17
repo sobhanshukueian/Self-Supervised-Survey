@@ -65,7 +65,6 @@ class Trainer:
         self.save_dir = save_dir
         self.batch_size = batch_size
         self.epochs = epochs
-        self.use_ema = False
         self.model_name = model_name
         self.weights = weights
         self.visualize_plots = visualize_plots
@@ -220,7 +219,7 @@ class Trainer:
                         # PLot Embeddings
                         self.plot_embeddings(np.array(val_embeddings), np.array(val_labels), 0)
 
-                        knn_acc = knn_monitor(self.model.online, train_val_dataloader, test_dataloader, self.epoch, k=200, hide_progress=False)
+                        knn_acc = knn_monitor(self.model.online, self.train_val_loader, self.valid_loader, self.epoch, k=200, hide_progress=False)
 
                         # # Delete Data after PLotting
                         del val_embeddings, val_labels
