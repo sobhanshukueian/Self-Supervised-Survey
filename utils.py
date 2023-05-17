@@ -11,10 +11,7 @@ from torch.optim.lr_scheduler import _LRScheduler
 import math
 import numpy as np
 
-
-
-
-
+from configs import model_config
 import torch.nn as nn
 
 def cosine_scheduler(base_value, final_value, epochs, niter_per_ep, warmup_epochs=0, start_warmup_value=0):
@@ -148,10 +145,10 @@ def count_parameters(model, conf):
 
 def save(conf, save_dir, model_name, model, epoch, val_loss, best_loss, optimizer):
     # create config object
-    # conf = json.dumps(conf)
-    # f = open(save_dir + "/config.json","w")
-    # f.write(conf)
-    # f.close()
+    conf = json.dumps(conf)
+    f = open(save_dir + "/config.json","w")
+    f.write(conf)
+    f.close()
 
     # save model
     save_ckpt_dir = osp.join(save_dir, 'weights')
@@ -266,3 +263,14 @@ def compute_acc(predicted, labels):
 
 
     
+# lr scheduler for training
+def adjust_learning_rate(optimizer, epoch):
+    """Decay the learning rate based on schedule"""
+    lr = model_config["LEARNING_RATE"]
+    if True:  # cosine lr schedule
+        lr *= 0.5 * (1. + math.cos(math.pi * epoch / model_config["EPOCHS"]))
+    else:  # stepwise lr schedule
+        for milestone in args.schedule:
+            lr *= 0.1 if epoch >= milestone else 1.
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr

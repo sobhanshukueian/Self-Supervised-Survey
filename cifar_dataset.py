@@ -11,18 +11,24 @@ import random
 
 root_path = "D:\Ai\Projects\self-supervised-learning\data"
 
-class CIFAR10Pair(CIFAR10):
-    """CIFAR10 Dataset.
-    """
+class CIFAR10Pair(Dataset):
+    def __init__(self, transform, train):
+        self.transform = transform
+        self.dataset = CIFAR10(root=root_path, train=train, download=True)
+
+        self.classes=['airplane', 'bird', 'car', 'cat', 'deer', 'dog', 'horse', 'monkey', 'ship', 'truck','unlabelled']
+
+    def __len__(self):
+        return len(self.dataset)
+
     def __getitem__(self, index):
-        img = self.data[index]
-        img = Image.fromarray(img)
-
+        img, label=self.dataset[index]
         if self.transform is not None:
-            im_1 = self.transform(img)
-            im_2 = self.transform(img)
+            img0 = self.transform(img)
+            img1 = self.transform(img)
+        
 
-        return im_1, im_2
+        return img0, img1, label
 
 train_transform = transforms.Compose([
     transforms.RandomResizedCrop(32),
@@ -37,34 +43,34 @@ test_transform = transforms.Compose([
     transforms.Normalize([0.4914, 0.4822, 0.4465], [0.2023, 0.1994, 0.2010])])
 
 # data prepare
-train_data = CIFAR10Pair(root=root_path, train=True, transform=train_transform, download=True)
-train_dataloader = DataLoader(train_data, batch_size=model_config["batch_size"], shuffle=False, num_workers=0, pin_memory=True, drop_last=True)
+train_data = CIFAR10Pair(train=True, transform=train_transform)
+train_dataloader = DataLoader(train_data, batch_size=model_config["batch_size"], shuffle=False, num_workers=0, pin_memory=True)
 
 train_val_data= CIFAR10(root=root_path, train=True, transform=test_transform, download=True)
 train_val_dataloader  = DataLoader(train_val_data, batch_size=model_config["batch_size"], shuffle=False, num_workers=0, pin_memory=True)
 
-test_data = CIFAR10(root=root_path, train=False, transform=test_transform, download=True)
+test_data = CIFAR10Pair(train=False, transform=test_transform)
 test_dataloader = DataLoader(test_data, batch_size=model_config["batch_size"], shuffle=False, num_workers=0, pin_memory=True)
 
 
 vis_dataloader = DataLoader(test_data, shuffle=True, num_workers=0, batch_size=model_config["show_batch_size"])
 
 
-train_features = next(iter(train_dataloader))
-print(len(train_dataloader))
-print(len(train_features[0]), len(train_features[1]))
+# train_features = next(iter(train_dataloader))
+# print(len(train_dataloader))
+# print(len(train_features[0]), len(train_features[1]), len(train_features[2]))
 
-print("Train Images 1 Shape: {}\nTrain Images 2 Shape: {}\nTrain Data Labels Shape: {}".format(train_features[0][0].shape, train_features[0][1].shape, train_features[1].shape,))
+# print("Train Images 1 Shape: {}\nTrain Images 2 Shape: {}\nTrain Data Labels Shape: {}".format(train_features[0][0].shape, train_features[0][1].shape, train_features[1].shape,))
 
-train_features = next(iter(train_val_dataloader))
-print(len(train_features[0]), len(train_features[1]))
-print(len(train_val_dataloader))
-print("Train Images 1 Shape: {}\nTrain Images 2 Shape: {}\nTrain Data Labels Shape: {}".format(train_features[0][0].shape, train_features[0][1].shape, train_features[1].shape,))
+# train_features = next(iter(train_val_dataloader))
+# print(len(train_features[0]), len(train_features[1]))
+# print(len(train_val_dataloader))
+# print("Train Images 1 Shape: {}\nTrain Images 2 Shape: {}\nTrain Data Labels Shape: {}".format(train_features[0][0].shape, train_features[0][1].shape, train_features[1].shape,))
 
-test_features = next(iter(test_dataloader))
-print(len(train_features[0]), len(train_features[1]))
-print(len(test_dataloader))
-print("Test Images 1 Shape: {}\nTest Images 2 Shape: {}\nTest Data Labels Shape: {}".format(test_features[0][0].shape, test_features[0][1].shape, test_features[1].shape,))
+# test_features = next(iter(test_dataloader))
+# print(len(train_features[0]), len(train_features[1]))
+# print(len(test_dataloader))
+# print("Test Images 1 Shape: {}\nTest Images 2 Shape: {}\nTest Data Labels Shape: {}".format(test_features[0][0].shape, test_features[0][1].shape, test_features[1].shape,))
 
 
 if model_config["show_batch"]:

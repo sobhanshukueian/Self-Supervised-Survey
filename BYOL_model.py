@@ -72,4 +72,4 @@ class BYOLNetwork(nn.Module):
 
         loss = (self.byol_loss(x1_1_pred, x2_1) + self.byol_loss(x1_2_pred, x2_2)).mean()
 
-        return loss
+        return (x1_1_pred, x1_2_pred, x2_1, x2_2, x1_1), loss
