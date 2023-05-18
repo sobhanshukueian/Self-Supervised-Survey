@@ -110,9 +110,9 @@ class Trainer:
         if self.verbose > 2:
             self.conf = count_parameters(self.model, self.conf)
 
-        learning_rate = model_config["LEARNING_RATE"] * model_config["batch_size"]  / 256
+        self.learning_rate = model_config["LEARNING_RATE"] * model_config["batch_size"]  / 256
 
-        self.optimizer, self.conf = get_optimizer(get_params_groups(self.model), self.conf, self.resume, self.ckpt, optimizer=OPTIMIZER, lr0=learning_rate, momentum=model_config["MOMENTUM"], weight_decay=model_config["WEIGHT_DECAY"], verbose=self.verbose)
+        self.optimizer, self.conf = get_optimizer(get_params_groups(self.model), self.conf, self.resume, self.ckpt, optimizer=OPTIMIZER, lr0=self.learning_rate, momentum=model_config["MOMENTUM"], weight_decay=model_config["WEIGHT_DECAY"], verbose=self.verbose)
         # self.optimizer = torch.optim.SGD(get_params_groups(self.model), lr=0.06, weight_decay=5e-4, momentum=0.9)
 
         if self.resume:
@@ -146,7 +146,6 @@ class Trainer:
     # Each Train Step
     def train_step(self, batch_data):
         self.model.train()
-        adjust_learning_rate(self.optimizer, self.epoch)
 
         image1, image2, targets = self.prepro_data(batch_data, self.device, True)
         
@@ -188,6 +187,8 @@ class Trainer:
                     # ############################################################Train Loop
                     # Training loop
                     if self.epoch != 0:
+                        adjust_learning_rate(self.optimizer, self.epoch, self.learning_rate)
+
                         pbar = enumerate(self.train_loader)
                         pbar = tqdm(pbar, desc=('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss'), total=self.max_stepnum)                        
 

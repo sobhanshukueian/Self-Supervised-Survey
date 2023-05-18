@@ -144,6 +144,8 @@ def count_parameters(model, conf):
     return conf
 
 def save(conf, save_dir, model_name, model, epoch, val_loss, best_loss, optimizer):
+    if not osp.exists(save_dir):
+        os.makedirs(save_dir)
     # create config object
     conf = json.dumps(conf)
     f = open(save_dir + "/config.json","w")
@@ -263,14 +265,18 @@ def compute_acc(predicted, labels):
 
 
     
-# lr scheduler for training
-def adjust_learning_rate(optimizer, epoch):
+def adjust_learning_rate(optimizer, epoch, learning_rate):
     """Decay the learning rate based on schedule"""
-    lr = model_config["LEARNING_RATE"]
-    if True:  # cosine lr schedule
-        lr *= 0.5 * (1. + math.cos(math.pi * epoch / model_config["EPOCHS"]))
-    else:  # stepwise lr schedule
-        for milestone in args.schedule:
-            lr *= 0.1 if epoch >= milestone else 1.
+    lr = learning_rate
+    warmup_epoch = model_config["WARM_UP"]
+    # cosine lr schedule
+    warmup_lr_schedule = np.linspace(0, lr, warmup_epoch)
+
+    if epoch < warmup_epoch:
+        lr = warmup_lr_schedule[epoch]
+    else:
+        lr *= 0.5 * (1. + math.cos(math.pi * (epoch - warmup_epoch) / (model_config["EPOCHS"] - warmup_epoch)))
+
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
+    print(f'epoch:{epoch}, lr: {lr}')

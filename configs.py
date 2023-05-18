@@ -22,7 +22,8 @@ model_config = dict(
     MOMENTUM=0.9,
     LEARNING_RATE=0.05,
     WEIGHT_DECAY = 0.00005,
-    USE_SCHEDULER = False
+    USE_SCHEDULER = False,
+    WARM_UP = 30
 )
 
 # Linear Evaluation Config

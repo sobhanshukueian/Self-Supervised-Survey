@@ -306,9 +306,9 @@ class BYOLPANetwork(nn.Module):
         return (x1_1_pred, x1_2_pred, x2_1, x2_2), loss
  
 
-temp1 = torch.rand((6, 3, 32, 32))
-temp2 = torch.rand((6, 3, 32, 32))
-temp_model = BYOLPANetwork()
-ress = temp_model(temp1, temp2)[0]
-for res in ress:
-    print(res[0].size(), res[1].size(), res[2].size(), res[3].size())
+# temp1 = torch.rand((6, 3, 32, 32))
+# temp2 = torch.rand((6, 3, 32, 32))
+# temp_model = BYOLPANetwork()
+# ress = temp_model(temp1, temp2)[0]
+# for res in ress:
+#     print(res[0].size(), res[1].size(), res[2].size(), res[3].size())

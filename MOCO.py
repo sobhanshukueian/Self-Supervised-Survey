@@ -28,7 +28,7 @@ from cifar_dataset import train_dataloader, train_val_dataloader, test_dataloade
 from vis import show_batch
 from configs import model_config
 from utils import LARS, off_diagonal, get_color, get_colors, count_parameters, save, adjust_learning_rate, get_params_groups
-from BYOL_model import BYOLNetwork
+from MOCO_model import MOCO_Network
 from main_utils import get_optimizer, get_model
 from knn_eval import knn_monitor
 
@@ -73,6 +73,8 @@ class Trainer:
         self.verbose = verbose
         self.train_losses=[]
         self.val_losses=[]
+        self.train_losses_s=[]
+        self.val_losses_s=[]
         self.conf = {'Basic configs': model_config, 'Max_iter_num' : '', 'Epochs' : self.epochs, 'Trained_epoch' : 0, 'Optimizer' : '', 'Parameter_size' : '', "Model" : ''}
         self.ckpt = False
         self.resume = resume
@@ -81,8 +83,6 @@ class Trainer:
         self.use_scheduler = use_scheduler
         self.scheduler = False
         
-
-
         temm=0
         tmp_save_dir = self.save_dir
         while osp.exists(tmp_save_dir):
@@ -93,21 +93,25 @@ class Trainer:
         del temm
         print("Save Project in {} directory.".format(self.save_dir))
 
-
         # get data loader
         self.train_loader, self.valid_loader, self.train_val_loader = train_loader, valid_loader, train_val_loader
         self.max_stepnum = len(self.train_loader)
         self.conf["Max_iter_num"] = self.max_stepnum
 
-
         # get model 
-        self.model, self.conf, self.ckpt = get_model("byol", self.conf, self.resume, self.resume_dir, self.weights, self.verbose)
+        self.model, self.conf, self.ckpt = get_model("MOCO", self.conf, self.resume, self.resume_dir, self.weights, self.verbose)
         self.model = self.model.to(device)
+        
+        self.model.target.requires_grad_(False)
+
+
         if self.verbose > 2:
             self.conf = count_parameters(self.model, self.conf)
 
-        self.optimizer, self.conf = get_optimizer(self.model.parameters(), self.conf, self.resume, self.ckpt, optimizer=OPTIMIZER, lr0=model_config["LEARNING_RATE"], momentum=model_config["MOMENTUM"], weight_decay=model_config["WEIGHT_DECAY"], verbose=self.verbose)
-        self.optimizer = torch.optim.SGD(get_params_groups(self.model), lr=0.06, weight_decay=5e-4, momentum=0.9)
+        self.learning_rate = model_config["LEARNING_RATE"] * model_config["batch_size"]  / 256
+
+        self.optimizer, self.conf = get_optimizer(get_params_groups(self.model), self.conf, self.resume, self.ckpt, optimizer=OPTIMIZER, lr0=self.learning_rate, momentum=model_config["MOMENTUM"], weight_decay=model_config["WEIGHT_DECAY"], verbose=self.verbose)
+        # self.optimizer = torch.optim.SGD(get_params_groups(self.model), lr=0.06, weight_decay=5e-4, momentum=0.9)
 
         if self.resume:
             self.start_epoch = self.ckpt["epoch"] + 1
@@ -140,11 +144,10 @@ class Trainer:
     # Each Train Step
     def train_step(self, batch_data):
         self.model.train()
-        adjust_learning_rate(self.optimizer, self.epoch)
 
         image1, image2, targets = self.prepro_data(batch_data, self.device, True)
         
-        preds, loss = self.model(image1, image2)
+        preds, loss, losses = self.model(image1, image2)
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -152,7 +155,7 @@ class Trainer:
         
         self.model.update_moving_average()
 
-        return loss.cpu().detach().numpy()#, [pred.cpu().detach().numpy() for pred in preds]#, targets.cpu().detach().numpy()
+        return loss.cpu().detach().numpy(), [loss.cpu().detach().numpy() for loss in losses]#, [pred.cpu().detach().numpy() for pred in preds]#, targets.cpu().detach().numpy()
 
 
     # Each Validation Step
@@ -161,9 +164,11 @@ class Trainer:
         image1, image2, targets = self.prepro_data(batch_data, self.device, True)
 
         # forward
-        preds, loss = self.model(image1, image2)
+        preds, loss, losses = self.model(image1, image2)
 
-        return loss.cpu().detach().numpy(), [pred.cpu().detach().numpy() for pred in preds], targets.cpu().detach().numpy()
+        # print(targets.size())
+        # print(preds[0].size())
+        return loss.cpu().detach().numpy(), [pred.cpu().detach().numpy() for pred in preds], targets.cpu().detach().numpy(), [loss.cpu().detach().numpy() for loss in losses]
 
     # Training Process
     def train(self):
@@ -182,43 +187,54 @@ class Trainer:
                     # ############################################################Train Loop
                     # Training loop
                     if self.epoch != 0:
+                        adjust_learning_rate(self.optimizer, self.epoch, self.learning_rate)
+
                         pbar = enumerate(self.train_loader)
                         pbar = tqdm(pbar, desc=('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss'), total=self.max_stepnum)                        
 
                         for step, batch_data in pbar:
-                            train_loss = self.train_step(batch_data)
+                            train_loss, losses = self.train_step(batch_data)
                             self.train_losses.append(train_loss)
+                            self.train_losses_s.append(losses)
                             
                         print('%20s' * 3  % ("Train", f'{self.epoch}/{self.epochs}', train_loss.item()))                 
                         del pbar
-            
+        
                     # ############################################################Validation Loop
 
                     #     del vbar
                     if self.epoch % EVALUATION_FREQ == 0 : 
-                        val_labels = []
                         val_embeddings = []
+                        val_embeddings_normalized = []
+                        val_labels = []
 
                         # Validation Loop
                         vbar = enumerate(self.valid_loader)
                         vbar = tqdm(vbar, desc=('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss'), total=len(self.valid_loader))
                         for step, batch_data in vbar:
-                            self.val_loss, val_embeds, val_targets = self.val_step(batch_data)
+                            self.val_loss, val_embeds, val_targets, val_losses = self.val_step(batch_data)
 
-                            if self.epoch != 0: self.val_losses.append(self.val_loss)
+                            # if self.epoch != 0:
+                            self.val_losses.append(self.val_loss)
+                            self.val_losses_s.append(val_losses)
 
-                            val_embeddings.extend(val_embeds[4])
+                            val_embeddings.extend(val_embeds[0])
+                            val_embeddings_normalized.extend(val_embeds[1])
                             val_labels.extend(val_targets)
 
                         print('%20s' * 3 % ("Validation", f'{self.epoch}/{self.epochs}', self.val_loss.item()))
                         del vbar
 
                         # PLot Losses
-                        if self.epoch != 0: self.plot_loss()
+                        # if self.epoch != 0: 
+                        # self.plot_loss()
 
                         # PLot Embeddings
-                        self.plot_embeddings(np.array(val_embeddings), np.array(val_labels), 0)
+                        # print(val_embeds[0].shape)
+                        # print(val_targets.shape)
 
+                        self.plot_embeddings(np.array(val_embeddings), np.array(val_labels))
+                        self.plot_embeddings(np.array(val_embeddings_normalized), np.array(val_labels), "normalized", 0)
                         knn_acc = knn_monitor(self.model.online, self.train_val_loader, self.valid_loader, self.epoch, k=200, hide_progress=False)
 
                         # # Delete Data after PLotting
@@ -244,24 +260,45 @@ class Trainer:
             print(f'\nTraining completed in {time.ctime(finish_time)} \nIts Done in: {(time.time() - self.start_time) / 3600:.3f} hours.') 
     # -------------------------------------------------------Training Callback after each epoch--------------------------
     def plot_loss(self, train_mean_size=1, val_mean_size=1):
-        COLS=3
-        ROWS=1
+        COLS=5
+        ROWS=2
         LINE_WIDTH = 2
         fig, ax = plt.subplots(ROWS, COLS, figsize=(COLS*10, ROWS*10))
         fig.suptitle("Losses Plot", fontsize=16)
 
         # train_mean_size = self.max_stepnum/self.batch_size
-        ax[0].plot(np.arange(len(self.train_losses) / train_mean_size), np.mean(np.array(self.train_losses).reshape(-1, train_mean_size), axis=1), 'r',  label="training loss", linewidth=LINE_WIDTH)
-        ax[0].set_title("Training Loss")
+        ax[0, 0].plot(np.array(self.train_losses),  label="Training loss", linewidth=LINE_WIDTH+1)
+        ax[0, 1].plot(np.array(self.train_losses_s)[:, 0], 'b--',  label="ISO KLD loss", linewidth=LINE_WIDTH-1)
+        ax[0, 2].plot(np.array(self.train_losses_s)[:, 1], 'g--',  label="KLD loss", linewidth=LINE_WIDTH-1)
+        ax[0, 3].plot(np.array(self.train_losses_s)[:, 2], 'r--',  label="Euclidean loss", linewidth=LINE_WIDTH-1)
 
-        val_mean_size = len(self.valid_loader)
-        ax[1].plot(np.arange(len(self.val_losses) / val_mean_size), np.mean(np.array(self.val_losses).reshape(-1, val_mean_size), axis=1), 'g',  label="validation loss", linewidth=LINE_WIDTH)
-        ax[1].set_title("Validation Loss")
+        ax[0, 4].plot(np.array(self.train_losses),  label="Training loss", linewidth=LINE_WIDTH+1)
+        ax[0, 4].plot(np.array(self.train_losses_s)[:, 0], 'b--',  label="ISO KLD loss", linewidth=LINE_WIDTH-1)
+        ax[0, 4].plot(np.array(self.train_losses_s)[:, 1], 'g--',  label="KLD loss", linewidth=LINE_WIDTH-1)
+        ax[0, 4].plot(np.array(self.train_losses_s)[:, 2], 'r--',  label="Euclidean loss", linewidth=LINE_WIDTH-1)
 
-        train_mean_size = self.max_stepnum
-        ax[2].plot(np.arange(len(self.train_losses) / train_mean_size), np.mean(np.array(self.train_losses).reshape(-1, train_mean_size), axis=1), 'r',  label="training loss", linewidth=LINE_WIDTH)
-        ax[2].plot(np.arange(len(self.val_losses) / val_mean_size), np.mean(np.array(self.val_losses).reshape(-1, val_mean_size), axis=1), 'g',  label="validation loss", linewidth=LINE_WIDTH)
-        ax[2].set_title("Train Validation Loss")
+        ax[0, 0].set_title("Train Loss")
+        ax[0, 1].set_title("ISO KLD loss")
+        ax[0, 2].set_title("KLD loss")
+        ax[0, 3].set_title("Euclidean loss")
+        ax[0, 4].legend()
+
+        # val_mean_size = len(self.valid_loader)
+        ax[1, 0].plot(np.array(self.val_losses),  label="Validation loss", linewidth=LINE_WIDTH+1)
+        ax[1, 1].plot(np.array(self.val_losses_s)[:, 0], 'b--',  label="ISO KLD loss", linewidth=LINE_WIDTH-1)
+        ax[1, 2].plot(np.array(self.val_losses_s)[:, 1], 'g--',  label="KLD loss", linewidth=LINE_WIDTH-1)
+        ax[1, 3].plot(np.array(self.val_losses_s)[:, 2], 'r--',  label="Euclidean loss", linewidth=LINE_WIDTH-1)
+
+        ax[1, 4].plot(np.array(self.val_losses),  label="Validation loss", linewidth=LINE_WIDTH+1)
+        ax[1, 4].plot(np.array(self.val_losses_s)[:, 0], 'b--',  label="ISO KLD loss", linewidth=LINE_WIDTH-1)
+        ax[1, 4].plot(np.array(self.val_losses_s)[:, 1], 'g--',  label="KLD loss", linewidth=LINE_WIDTH-1)
+        ax[1, 4].plot(np.array(self.val_losses_s)[:, 2], 'r--',  label="Euclidean loss", linewidth=LINE_WIDTH-1)
+        
+        ax[1, 0].set_title("Train Loss")
+        ax[1, 1].set_title("ISO KLD loss")
+        ax[1, 2].set_title("KLD loss")
+        ax[1, 3].set_title("Euclidean loss")
+        ax[1, 4].legend()
 
         if self.save_plots:
             save_plot_dir = osp.join(self.save_dir, 'plots') 
@@ -271,26 +308,25 @@ class Trainer:
         if self.visualize_plots:
             plt.show()
 
-    def plot_embeddings(self, val_embeddings, val_labels, val_plot_size=0):
+    def plot_embeddings(self, val_embeddings, val_labels, name="", val_plot_size=0):
         if val_plot_size > 0:
             val_embeddings = np.array(val_embeddings[:val_plot_size])
             val_labels = np.array(val_labels[:val_plot_size])
-
-        OUTPUT_EMBEDDING_SIZE = 10
-
-        COLS = int(OUTPUT_EMBEDDING_SIZE / 2)
+        OUTPUT_EMBEDDING_SIZE=4
+        COLS = int(OUTPUT_EMBEDDING_SIZE / 2) + 2
         ROWS = 1
         fig, ax = plt.subplots(ROWS, COLS, figsize=(COLS*10, ROWS*10))
         # fig.suptitle("Embeddings Plot", fontsize=16)
         for dim in range(0, OUTPUT_EMBEDDING_SIZE-1, 2):
             ax[int(dim/2)].set_title("Validation Samples for {} and {} dimensions".format(dim, dim+1))
+            # print(val_embeddings[:, dim], val_embeddings[:, dim+1], val_labels, dim, val_embeddings.shape, val_labels.shape)
             ax[int(dim/2)].scatter(val_embeddings[:, dim], val_embeddings[:, dim+1], c=get_colors(np.squeeze(val_labels)))
-            
+            # ax[int(dim/2)].scatter(val_embeddings[:, dim], val_embeddings[:, dim+1], c=get_colors(np.squeeze(val_labels)))
         if self.save_plots:
             save_plot_dir = osp.join(self.save_dir, 'plots') 
             if not osp.exists(save_plot_dir):
                 os.makedirs(save_plot_dir)
-            plt.savefig("{}/epoch-{}-plot.png".format(save_plot_dir, self.epoch)) 
+            plt.savefig("{}/epoch-{}-plot_{}.png".format(save_plot_dir, self.epoch, name)) 
         if self.visualize_plots:
             plt.show()
 

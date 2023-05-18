@@ -13,7 +13,7 @@ from utils import LARS
 from Barlow_model import BarlowTwins
 from BYOL_model import BYOLNetwork
 from BYOL_PA_model import BYOLPANetwork 
-# from VSS_model import VSS
+from MOCO_model import MOCO_Network
 from configs import model_config
 
 
@@ -52,14 +52,13 @@ def get_optimizer(model_parameters, conf, resume, ckpt, optimizer="LARS", lr0=0.
 # Get Model 
 def get_model(name, conf, resume, save_dir="./", weights=None, device='cpu', verbose=1):
     if name == "barlow":
-        # Get Model Archutecture From Model Class.
         model = BarlowTwins()
     elif name == "byol":
         model = BYOLNetwork()
     elif name == "byol-pa":
         model = BYOLPANetwork()
-    elif name == "VSS":
-        model = VSS()
+    elif name == "MOCO":
+        model = MOCO_Network()
     elif name == "supervised":
         model = torchvision.models.resnet50(pretrained=True, num_classes=model_config["EMBEDDING_SIZE"])
     elif name == "random":
