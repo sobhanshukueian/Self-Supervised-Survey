@@ -95,16 +95,37 @@ class MyLoss(torch.nn.Module):
 
     def kl_divergence(self, mu1, log_var1, mu2, log_var2):
         max_logvar = 10.0
-        log_var1 = torch.clamp(log_var1, max=max_logvar)
-        log_var2 = torch.clamp(log_var2, max=max_logvar)
-
-        
+        # log_var1 = torch.clamp(log_var1, max=max_logvar)
+        # log_var2 = torch.clamp(log_var2, max=max_logvar)
         var1 = torch.exp(log_var1)
         var2 = torch.exp(log_var2)
 
-        term1 = (var1 / var2 - 1).sum(dim=1)
-        term2 = ((mu2 - mu1).pow(2) / var2).sum(dim=1)
+        # term1 = (var1 / var2 - 1).sum(dim=1)
+        term1 = 0
+        term2 = ((mu2 - mu1).pow(2)).sum(dim=1)
         term3 = (log_var2 - log_var1).sum(dim=1)
+
+        if torch.isinf(term2.mean()) or torch.isinf(term3.mean()):
+            # print("\nterm1: ", term1.mean())
+            print(f"\nterm2: {term2.mean()}")
+            print(f"\nterm3: {term3.mean()}")
+
+            # mask = torch.isinf(term1)
+            inf_indices = torch.nonzero(mask)
+            # print("\nterm1 indices: ", term1[inf_indices])
+            print(f"\nvar1 indices: {var1[inf_indices]} \nvar2 indices: {var2[inf_indices]}")
+            print(f"\nlog_var1 indices: {log_var1[inf_indices]}, log_var2 indices: {log_var2[inf_indices]}")
+
+
+        kl_div = 0.5 * (term1 + term2 + term3)
+        return kl_div.mean()
+        
+    def iso_KL_divergence(self, mean, log_var):
+        # max_logvar = 10.0
+        # log_var = torch.clamp(log_var, max=max_logvar)
+        term1 = -1*(1+ log_var)
+        term2 =  mean.pow(2)
+        term3 = log_var.exp()
 
         if torch.isinf(term1.mean()) or torch.isinf(term2.mean()) or torch.isinf(term3.mean()):
             print("\nterm1: ", term1.mean())
@@ -114,17 +135,9 @@ class MyLoss(torch.nn.Module):
             mask = torch.isinf(term1)
             inf_indices = torch.nonzero(mask)
             print("\nterm1 indices: ", term1[inf_indices])
-            print(f"\nvar1 indices: {var1[inf_indices]} \nvar2 indices: {var2[inf_indices]}")
-            print(f"\nlog_var1 indices: {log_var1[inf_indices]}, log_var2 indices: {log_var2[inf_indices]}")
+            print(f"\nlog_var1 indices: {log_var[inf_indices]}")
 
-
-        kl_div = 0.5 * (term1 + term2 + term3)
-        return kl_div.mean()
-        
-    def iso_KL_divergence(self, mean, log_var):
-        max_logvar = 10.0
-        log_var = torch.clamp(log_var, max=max_logvar)
-        return 0.5 * torch.mean(-1*(1+ log_var) + mean.pow(2) + log_var.exp())
+        return 0.5 * torch.mean(term1 + term2 + term3)
 
     def cosine_sim(self, tensor1, tensor2):
         return torch.abs(F.cosine_similarity(tensor1, tensor2, dim=1)).mean()
@@ -184,5 +197,9 @@ class MyLoss(torch.nn.Module):
     
         total_loss = KLD +  euclidean_distance + kl_div
         if torch.isnan(total_loss) or torch.isinf(total_loss):
-            print(KLD, kl_div, cosine_similarity)
+            print("------------------------")
+            print("KLD: ", KLD)
+            print("kl_div", kl_div)
+            print("euclidean_distance", euclidean_distance)
+
         return total_loss, [KLD, kl_div, euclidean_distance]

@@ -21,13 +21,14 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import cross_val_score
 
-def get_optimizer(model_parameters, conf, resume, ckpt, optimizer="LARS", lr0=0.001, momentum=0.937, weight_decay=0.00005, verbose=1):
+def get_optimizer(model_parameters, conf, resume, ckpt, optimizer, lr0=0.001, momentum=0.937, weight_decay=0.00005, verbose=1):
     assert optimizer == 'SGD' or 'Adam' or 'LARS', 'ERROR: unknown optimizer, use SGD defaulted'
     if optimizer == 'SGD':
         optim = torch.optim.SGD(model_parameters, lr=lr0, momentum=momentum, weight_decay=weight_decay)
     elif optimizer == 'Adam':
         optim = torch.optim.Adam(model_parameters, lr=lr0, weight_decay=1e-6)
     elif optimizer == 'AdamW':
+        # optim = torch.optim.AdamW(model_parameters, lr=lr0, weight_decay=weight_decay)
         optim = torch.optim.AdamW(model_parameters)
     elif optimizer == "LARS": 
         param_weights = []
