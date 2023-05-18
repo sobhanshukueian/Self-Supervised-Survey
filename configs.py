@@ -10,7 +10,7 @@ model_config = dict(
     VERBOSE = 2,
     SAVE_PLOTS = True,
     VISUALIZE_PLOTS = False,
-    SAVE_DIR = "/content/drive/MyDrive/byol/run",
+    SAVE_DIR = "./byol/run",
     MODEL_NAME = "BYOL Model Adaptive...",
     WEIGHTS = None,
     OPTIMIZER = "SGD",
@@ -22,7 +22,7 @@ model_config = dict(
     MOMENTUM=0.9,
     LEARNING_RATE=0.06,
     WEIGHT_DECAY = 0.00005,
-    USE_SCHEDULER = True
+    USE_SCHEDULER = False
 )
 
 # Linear Evaluation Config

@@ -202,6 +202,7 @@ class Neck(nn.Module):
         )
         self.conv_block4 = Transpose(ch_list[3], ch_list[4])
         self.conv_block5 = C3(ch_list[4] * 2, ch_list[5], shortcut=False, bottle_neck_num=num_repeat[1])
+        
 
     def forward(self, x):
         (x2, x1, x0) = x
@@ -212,6 +213,7 @@ class Neck(nn.Module):
         out_concat_1 = torch.cat([out_conv_block_2, x1], 1)
 
         out_conv_block_3 = self.conv_block3(out_concat_1)
+
         outputs.append(out_conv_block_3)
         out_conv_block_4 = self.conv_block4(out_conv_block_3)
         out_concat_2 = torch.cat([out_conv_block_4, x2], 1)
@@ -264,6 +266,13 @@ class BYOLPANetwork(nn.Module):
             target_params.data = self.ema.update_average(old_weight, up_weight)
 
 
+    def byol_loss(self, x, y):
+        # L2 normalization
+        x = F.normalize(x, dim=-1, p=2)
+        y = F.normalize(y, dim=-1, p=2)
+        loss = 2 - 2 * (x * y).sum(dim=-1)
+        return loss       
+
     def forward(self, x1, x2=None, return_embedding=False):
         if return_embedding or (x2 is None):
             x1 = self.online(x1)
@@ -272,7 +281,10 @@ class BYOLPANetwork(nn.Module):
 
         # online projections: backbone + MLP projection
         x1_1 = self.online(x1)
-        x1_1 = self.online.neck(x1_1)[0].squeeze()
+        x1_1 = self.online.neck(x1_1)
+        for x in x1_1:
+            print(x.size())
+        x1_1 = x1_1[0].squeeze()
         # print(x1_1.size())
         x1_2 = self.online(x2)
         x1_2 = self.online.neck(x1_2)[0].squeeze()
@@ -289,17 +301,14 @@ class BYOLPANetwork(nn.Module):
             x2_2 = self.target(x2)
             x2_2 = self.target.neck(x2_2)[0].squeeze().detach()
 
-        return x1_1_pred, x1_2_pred, x2_1, x2_2
+        loss = (self.byol_loss(x1_1_pred, x2_1) + self.byol_loss(x1_2_pred, x2_2)).mean()
 
-def byol_loss(x, y):
-    # L2 normalization
-    x = F.normalize(x, dim=-1, p=2)
-    y = F.normalize(y, dim=-1, p=2)
-    loss = 2 - 2 * (x * y).sum(dim=-1)
-    return loss        
+        return (x1_1_pred, x1_2_pred, x2_1, x2_2), loss
+ 
 
-# temp1 = torch.rand((6, 3, 32, 32))
-# temp2 = torch.rand((6, 3, 32, 32))
-# temp_model = BYOLPANetwork()
-# res = temp_model(temp1, temp2)
-# print(res[0].size(), res[1].size(), res[2].size(), res[3].size())
+temp1 = torch.rand((6, 3, 32, 32))
+temp2 = torch.rand((6, 3, 32, 32))
+temp_model = BYOLPANetwork()
+ress = temp_model(temp1, temp2)[0]
+for res in ress:
+    print(res[0].size(), res[1].size(), res[2].size(), res[3].size())

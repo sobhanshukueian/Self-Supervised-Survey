@@ -44,8 +44,8 @@ def get_optimizer(model_parameters, conf, resume, ckpt, optimizer="LARS", lr0=0.
 
     if resume:
         optim.load_state_dict(ckpt['optimizer'])
-    if verbose > 1:
-        print(f"{'optimizer:'} {type(optim).__name__}")
+
+    print(f"{'optimizer:'} {type(optim).__name__}")
     conf['Optimizer'] = f"{'optimizer:'} {type(optim).__name__}"
     return optim, conf
 

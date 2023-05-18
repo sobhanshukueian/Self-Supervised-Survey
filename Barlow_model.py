@@ -35,6 +35,7 @@ class BarlowTwins(nn.Module):
 
         z1 = self.bn(self.projector(r1))
         z2 = self.bn(self.projector(r2))
+        
         return z1, z2
 
 
