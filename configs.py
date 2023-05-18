@@ -20,7 +20,7 @@ model_config = dict(
     RESUME = False,
     RESUME_DIR= "/content/drive/MyDrive/byol/run",
     MOMENTUM=0.9,
-    LEARNING_RATE=0.06,
+    LEARNING_RATE=0.05,
     WEIGHT_DECAY = 0.00005,
     USE_SCHEDULER = False
 )
