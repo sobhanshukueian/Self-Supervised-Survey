@@ -13,7 +13,7 @@ from utils import LARS
 from Barlow_model import BarlowTwins
 from BYOL_model import BYOLNetwork
 from BYOL_PA_model import BYOLPANetwork 
-from MOCO_model import MOCO_Network
+from MOCO_model2 import MOCO
 from configs import model_config
 
 
@@ -59,7 +59,7 @@ def get_model(name, conf, resume, save_dir="./", weights=None, device='cpu', ver
     elif name == "byol-pa":
         model = BYOLPANetwork()
     elif name == "MOCO":
-        model = MOCO_Network()
+        model = MOCO()
     elif name == "supervised":
         model = torchvision.models.resnet50(pretrained=True, num_classes=model_config["EMBEDDING_SIZE"])
     elif name == "random":
