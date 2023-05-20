@@ -78,7 +78,8 @@ class MOCO(nn.Module):
         
         return kl_div.sum()
 
-
+    def cosine_sim(self, tensor1, tensor2):
+        return torch.abs(F.cosine_similarity(tensor1, tensor2, dim=1)).mean()
 
     def forward_once(self, x):
         embedding_o = self.online(x)
@@ -93,12 +94,12 @@ class MOCO(nn.Module):
             logvar_tar = torch.clamp(self.target.var(self.LeakyReLU(embedding_tar)), max=5) 
             z_tar = self.reparameterization(mean_tar, logvar_tar).detach()
 
-        distance_loss = self.byol_loss(z_o_p, z_tar)
+        distance_loss = self.cosine_sim(z_o_p, z_tar)
 
         kl_loss = self.kl_divergence(mean_o, logvar_o, mean_tar, logvar_tar)
 
         iso_kl_loss = self.iso_kl(mean_o, logvar_o)
-        # iso_kl_loss += self.iso_kl(mean_tar, logvar_tar)
+        iso_kl_loss += self.iso_kl(mean_tar, logvar_tar)
 
         # if torch.isnan(kl_loss) or torch.isinf(kl_loss):
         #     print("------------------------")
@@ -121,15 +122,16 @@ class MOCO(nn.Module):
 
         kl_total = kl_loss1 + kl_loss2
         iso_kl_total = iso_kl_loss1 + iso_kl_loss2
-        distance_total = (distance_loss1 + distance_loss2).mean()
+        distance_total = (distance_loss1 + distance_loss2).mean() 
+        distance_total *= 10000 
 
-        total_loss =  distance_total 
+        total_loss =  distance_total + iso_kl_total + kl_total
 
-        print("kl_loss: ", kl_total)
-        print("distance_total: ", distance_total)
-        print("iso_kl_total: ", iso_kl_total)
+        # print("kl_loss: ", kl_total)
+        # print("distance_total: ", distance_total)
+        # print("iso_kl_total: ", iso_kl_total)
 
-        return(embedding_o1, embedding_o2), total_loss, [kl_total, distance_total, iso_kl_total]
+        return(embedding_o1, embedding_o2), total_loss, [iso_kl_total, kl_total, distance_total]
 
 def find_inf_nan_indices(tensor):
     # Check for inf and nan values

@@ -20,10 +20,10 @@ model_config = dict(
     RESUME = False,
     RESUME_DIR= "/content/drive/MyDrive/byol/run",
     MOMENTUM=0.9,
-    LEARNING_RATE=0.05,
+    LEARNING_RATE=0.002,
     WEIGHT_DECAY = 0.00005,
     USE_SCHEDULER = False,
-    WARM_UP = 30
+    WARM_UP = 0
 )
 
 # Linear Evaluation Config

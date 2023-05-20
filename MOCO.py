@@ -268,35 +268,35 @@ class Trainer:
         # train_mean_size = self.max_stepnum/self.batch_size
         ax[0, 0].plot(np.array(self.train_losses),  label="Training loss", linewidth=LINE_WIDTH+1)
         ax[0, 1].plot(np.array(self.train_losses_s)[:, 0], 'b--',  label="ISO KLD loss", linewidth=LINE_WIDTH-1)
-        ax[0, 2].plot(np.array(self.train_losses_s)[:, 1], 'g--',  label="Distance loss", linewidth=LINE_WIDTH-1)
-        # ax[0, 3].plot(np.array(self.train_losses_s)[:, 2], 'r--',  label="Euclidean loss", linewidth=LINE_WIDTH-1)
+        ax[0, 2].plot(np.array(self.train_losses_s)[:, 1], 'g--',  label="KLD loss", linewidth=LINE_WIDTH-1)
+        ax[0, 3].plot(np.array(self.train_losses_s)[:, 2], 'r--',  label="Distance loss", linewidth=LINE_WIDTH-1)
 
         ax[0, 4].plot(np.array(self.train_losses),  label="Training loss", linewidth=LINE_WIDTH+1)
         ax[0, 4].plot(np.array(self.train_losses_s)[:, 0], 'b--',  label="ISO KLD loss", linewidth=LINE_WIDTH-1)
-        ax[0, 4].plot(np.array(self.train_losses_s)[:, 1], 'g--',  label="Distance loss", linewidth=LINE_WIDTH-1)
-        # ax[0, 4].plot(np.array(self.train_losses_s)[:, 2], 'r--',  label="Euclidean loss", linewidth=LINE_WIDTH-1)
+        ax[0, 4].plot(np.array(self.train_losses_s)[:, 1], 'g--',  label="KLD loss", linewidth=LINE_WIDTH-1)
+        ax[0, 4].plot(np.array(self.train_losses_s)[:, 2], 'r--',  label="Distance loss", linewidth=LINE_WIDTH-1)
 
         ax[0, 0].set_title("Train Loss")
         ax[0, 1].set_title("ISO KLD loss")
         ax[0, 2].set_title("KLD loss")
-        # ax[0, 3].set_title("Euclidean loss")
+        ax[0, 3].set_title("Distance loss")
         ax[0, 4].legend()
 
         # val_mean_size = len(self.valid_loader)
         ax[1, 0].plot(np.array(self.val_losses),  label="Validation loss", linewidth=LINE_WIDTH+1)
         ax[1, 1].plot(np.array(self.val_losses_s)[:, 0], 'b--',  label="ISO KLD loss", linewidth=LINE_WIDTH-1)
-        ax[1, 2].plot(np.array(self.val_losses_s)[:, 1], 'g--',  label="Distance loss", linewidth=LINE_WIDTH-1)
-        # ax[1, 3].plot(np.array(self.val_losses_s)[:, 2], 'r--',  label="Euclidean loss", linewidth=LINE_WIDTH-1)
+        ax[1, 2].plot(np.array(self.val_losses_s)[:, 1], 'g--',  label="KLD loss", linewidth=LINE_WIDTH-1)
+        ax[1, 3].plot(np.array(self.val_losses_s)[:, 2], 'r--',  label="Distance loss", linewidth=LINE_WIDTH-1)
 
         ax[1, 4].plot(np.array(self.val_losses),  label="Validation loss", linewidth=LINE_WIDTH+1)
         ax[1, 4].plot(np.array(self.val_losses_s)[:, 0], 'b--',  label="ISO KLD loss", linewidth=LINE_WIDTH-1)
-        ax[1, 4].plot(np.array(self.val_losses_s)[:, 1], 'g--',  label="Distance loss", linewidth=LINE_WIDTH-1)
-        # ax[1, 4].plot(np.array(self.val_losses_s)[:, 2], 'r--',  label="Euclidean loss", linewidth=LINE_WIDTH-1)
+        ax[1, 4].plot(np.array(self.val_losses_s)[:, 1], 'g--',  label="KLD loss", linewidth=LINE_WIDTH-1)
+        ax[1, 4].plot(np.array(self.val_losses_s)[:, 2], 'r--',  label="Distance loss", linewidth=LINE_WIDTH-1)
         
         ax[1, 0].set_title("Train Loss")
         ax[1, 1].set_title("ISO KLD loss")
-        ax[1, 2].set_title("Distance loss")
-        # ax[1, 3].set_title("Euclidean loss")
+        ax[1, 2].set_title("KLD loss")
+        ax[1, 3].set_title("Distance loss")
         ax[1, 4].legend()
 
         if self.save_plots:
