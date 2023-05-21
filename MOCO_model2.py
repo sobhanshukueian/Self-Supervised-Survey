@@ -123,7 +123,7 @@ class MOCO(nn.Module):
         kl_total = kl_loss1 + kl_loss2
         iso_kl_total = iso_kl_loss1 + iso_kl_loss2
         distance_total = (distance_loss1 + distance_loss2).mean() 
-        distance_total *= 10000 
+        distance_total *= 100000
 
         total_loss =  distance_total + iso_kl_total + kl_total
 
