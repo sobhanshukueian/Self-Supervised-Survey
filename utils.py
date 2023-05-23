@@ -280,3 +280,6 @@ def adjust_learning_rate(optimizer, epoch, learning_rate):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
     print(f'epoch:{epoch}, lr: {lr}')
+
+def adjust_loss_weights(epoch):
+    return 0.5 * ( 1. + math.cos(0.1*epoch)) * 100000

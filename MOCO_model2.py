@@ -3,9 +3,10 @@ import torch
 import torchvision.utils
 import torchvision
 import torch.nn.functional as F
+import torch.nn.init as init
 
 import copy
-from utils import EMA
+from utils import EMA, adjust_loss_weights
 from configs import model_config
 
 #create the Siamese Neural Network
@@ -84,17 +85,17 @@ class MOCO(nn.Module):
     def forward_once(self, x):
         embedding_o = self.online(x)
         mean_o = self.online.mean(self.LeakyReLU(embedding_o))
-        logvar_o = torch.clamp(self.online.var(self.LeakyReLU(embedding_o)), max=5) 
+        logvar_o = self.online.var(self.LeakyReLU(embedding_o))
         z_o = self.reparameterization(mean_o, logvar_o)
         z_o_p = self.predictor(z_o)
 
         with torch.no_grad():
             embedding_tar = self.target(x).detach()
             mean_tar = self.target.mean(self.LeakyReLU(embedding_tar)).detach()
-            logvar_tar = torch.clamp(self.target.var(self.LeakyReLU(embedding_tar)), max=5) 
+            logvar_tar = self.target.var(self.LeakyReLU(embedding_tar)).detach()
             z_tar = self.reparameterization(mean_tar, logvar_tar).detach()
 
-        distance_loss = self.cosine_sim(z_o_p, z_tar)
+        distance_loss = self.byol_loss(z_o_p, z_tar).mean()
 
         kl_loss = self.kl_divergence(mean_o, logvar_o, mean_tar, logvar_tar)
 
@@ -109,21 +110,26 @@ class MOCO(nn.Module):
 
 
         return kl_loss, distance_loss, iso_kl_loss, embedding_o
-        
+    
+    def init_var(self):
+        init.zeros_(self.online.var.weight)
+        init.zeros_(self.online.mean.weight)
 
-    def forward(self, x1, x2=None):
+
+    def forward(self, x1, x2=None, weight=0):
         if x2 is None:
             return self.online(x1)
 
         kl_loss1, distance_loss1, iso_kl_loss1, embedding_o1 = self.forward_once(x1)
         kl_loss2, distance_loss2, iso_kl_loss2, embedding_o2 = self.forward_once(x2)
 
-        
 
         kl_total = kl_loss1 + kl_loss2
         iso_kl_total = iso_kl_loss1 + iso_kl_loss2
-        distance_total = (distance_loss1 + distance_loss2).mean() 
-        distance_total *= 100000
+        distance_total = distance_loss1 + distance_loss2
+        # if weight > 0:
+        kl_total *= 0.0001
+        iso_kl_total *= 0.0001
 
         total_loss =  distance_total + iso_kl_total + kl_total
 
