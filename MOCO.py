@@ -206,8 +206,10 @@ class Trainer:
 
                     for step, batch_data in pbar:
                         train_loss, train_losses = self.train_step(batch_data)
-                        self.train_losses.append(train_loss)
-                        self.train_losses_s.append(train_losses)
+
+                        if self.epoch != 0:
+                            self.train_losses.append(train_loss)
+                            self.train_losses_s.append(train_losses)
 
                         self.train_elosses.append(train_loss)
                         self.train_elosses_s.append(train_losses)
@@ -233,8 +235,8 @@ class Trainer:
                             if self.epoch != 0: 
                                 self.val_losses.append(self.val_loss)
                                 self.val_losses_s.append(val_losses)
-                                self.val_elosses.append(self.val_loss)   
-                                self.val_elosses_s.append(val_losses)
+                            self.val_elosses.append(self.val_loss)   
+                            self.val_elosses_s.append(val_losses)
 
                             val_embeddings.extend(val_embeds[0])
                             val_embeddings_normalized.extend(val_embeds[1])
@@ -246,7 +248,7 @@ class Trainer:
                         # PLot Losses
                         if self.epoch != 0: 
                             self.plot_loss()
-                            self.plot_eloss()
+                        self.plot_eloss()
 
                         # PLot Embeddings
                         self.plot_embeddings(np.array(val_embeddings), np.array(val_labels), 0)

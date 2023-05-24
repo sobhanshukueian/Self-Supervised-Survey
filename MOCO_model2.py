@@ -130,8 +130,9 @@ class MOCO(nn.Module):
         # if weight > 0:
         kl_total *= 0.0001
         iso_kl_total *= 0.0001
+        distance_total *= 10
 
-        total_loss =  distance_total + iso_kl_total + kl_total
+        total_loss =  distance_total + iso_kl_total 
 
         # print("kl_loss: ", kl_total)
         # print("distance_total: ", distance_total)
