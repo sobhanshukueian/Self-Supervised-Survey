@@ -95,17 +95,18 @@ class MOCO(nn.Module):
             logvar_tar = self.target.var(self.LeakyReLU(embedding_tar)).detach()
             z_tar = self.reparameterization(mean_tar, logvar_tar).detach()
 
-        distance_loss = self.byol_loss(z_o_p, z_tar).mean()
+        distance_loss = self.byol_loss(z_o, z_tar).mean()
 
         kl_loss = self.kl_divergence(mean_o, logvar_o, mean_tar, logvar_tar)
 
         iso_kl_loss = self.iso_kl(mean_o, logvar_o)
         iso_kl_loss += self.iso_kl(mean_tar, logvar_tar)
 
-        # if torch.isnan(kl_loss) or torch.isinf(kl_loss):
-        #     print("------------------------")
-        #     print("kl_total: ", kl_loss)
-            # print("logvar_o: ", logvar_o)
+        if torch.isnan(distance_loss) or torch.isinf(distance_loss):
+            print("------------------------")
+            print("z_o: ", z_o)
+            print("z_o_p: ", z_o_p)
+            print("z_tar: ", z_tar)
             # print("logvar_tar: ", logvar_tar)
 
 
@@ -128,11 +129,11 @@ class MOCO(nn.Module):
         iso_kl_total = iso_kl_loss1 + iso_kl_loss2
         distance_total = distance_loss1 + distance_loss2
         # if weight > 0:
-        kl_total *= 0.0001
-        iso_kl_total *= 0.0001
-        distance_total *= 10
+        kl_total *= 0.001
+        iso_kl_total *= 0.001
+        # distance_total *= 
 
-        total_loss =  distance_total + iso_kl_total 
+        total_loss =  distance_total + iso_kl_total
 
         # print("kl_loss: ", kl_total)
         # print("distance_total: ", distance_total)
