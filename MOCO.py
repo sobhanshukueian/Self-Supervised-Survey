@@ -104,10 +104,6 @@ class Trainer:
         # get model 
         self.model, self.conf, self.ckpt = get_model("MOCO", self.conf, self.resume, self.resume_dir, self.weights, self.verbose)
         self.model = self.model.to(device)
-        
-        self.model.init_var()
-        self.model.target.requires_grad_(False)
-
 
 
         if self.verbose > 2:
@@ -156,8 +152,6 @@ class Trainer:
         loss.backward()
         self.optimizer.step()
         
-        self.model.update_moving_average()
-
         return loss.cpu().detach().numpy(), [loss.cpu().detach().numpy() for loss in losses]#, [pred.cpu().detach().numpy() for pred in preds]#, targets.cpu().detach().numpy()
 
 

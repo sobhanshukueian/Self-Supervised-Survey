@@ -15,12 +15,26 @@ class MOCO(nn.Module):
     def __init__(self, in_features=512, hidden_size=4096, embedding_size=256, projection_size=256, projection_hidden_size=2048, batch_norm_mlp=True):
         super(MOCO, self).__init__()
         self.online = self.get_representation()
+
         self.online.mean = nn.Linear(model_config["EMBEDDING_SIZE"], model_config["EMBEDDING_SIZE"])
         self.online.var = nn.Linear(model_config["EMBEDDING_SIZE"], model_config["EMBEDDING_SIZE"])
         self.predictor = self.get_linear_block()
 
+        init.zeros_(self.online.var.weight)
+        init.zeros_(self.online.mean.weight)
+        # init.zeros_(self.predictor.weight)
+        
+
+        self.target = self.get_representation()
+        self.target.mean = nn.Linear(model_config["EMBEDDING_SIZE"], model_config["EMBEDDING_SIZE"])
+        self.target.var = nn.Linear(model_config["EMBEDDING_SIZE"], model_config["EMBEDDING_SIZE"])
+
+        for param_t, param_o in zip(self.target.parameters(), self.online.parameters()):
+            param_t.data.copy_(param_o.data)  # initialize
+            param_t.requires_grad = False  # not update by gradient
+
         self.target = self.get_target()
-        self.ema = EMA(0.999)
+        self.ema = 0.999
 
         self.LeakyReLU = nn.LeakyReLU(0.2)
     
@@ -37,13 +51,14 @@ class MOCO(nn.Module):
         )
 
     def get_representation(self):
-        return torchvision.models.resnet50(num_classes=model_config["EMBEDDING_SIZE"])
+        backbone = torchvision.models.resnet50(num_classes=model_config["EMBEDDING_SIZE"])
+        proj = self.get_linear_block()
+        return nn.Sequential(backbone, proj)
 
     @torch.no_grad()
     def update_moving_average(self):
-        for online_params, target_params in zip(self.online.parameters(), self.target.parameters()):
-            old_weight, up_weight = target_params.data, online_params.data
-            target_params.data = self.ema.update_average(old_weight, up_weight)
+        for param_t, param_o in zip(self.target.parameters(), self.online.parameters()):
+            param_t.data = param_t.data * self.ema + param_o.data * (1. - self.ema)
             
     def reparameterization(self, mean, logvar):
         var = torch.exp(0.5*logvar)
@@ -84,18 +99,20 @@ class MOCO(nn.Module):
 
     def forward_once(self, x):
         embedding_o = self.online(x)
+        z_o_p = self.predictor(embedding_o)
+
         mean_o = self.online.mean(self.LeakyReLU(embedding_o))
         logvar_o = self.online.var(self.LeakyReLU(embedding_o))
-        z_o = self.reparameterization(mean_o, logvar_o)
-        z_o_p = self.predictor(z_o)
+        # z_o = self.reparameterization(mean_o, logvar_o)
 
         with torch.no_grad():
             embedding_tar = self.target(x).detach()
             mean_tar = self.target.mean(self.LeakyReLU(embedding_tar)).detach()
             logvar_tar = self.target.var(self.LeakyReLU(embedding_tar)).detach()
-            z_tar = self.reparameterization(mean_tar, logvar_tar).detach()
+            # z_tar = self.reparameterization(mean_tar, logvar_tar).detach()
 
-        distance_loss = self.byol_loss(z_o, z_tar).mean()
+        distance_loss = self.byol_loss(z_o_p, embedding_tar).mean()
+        # distance_loss = F.pairwise_distance(z_o_p, z_tar, keepdim = True).squeeze().mean()
 
         kl_loss = self.kl_divergence(mean_o, logvar_o, mean_tar, logvar_tar)
 
@@ -104,10 +121,11 @@ class MOCO(nn.Module):
 
         if torch.isnan(distance_loss) or torch.isinf(distance_loss):
             print("------------------------")
-            print("z_o: ", z_o)
+            # print("z_o: ", z_o)
             print("z_o_p: ", z_o_p)
-            print("z_tar: ", z_tar)
-            # print("logvar_tar: ", logvar_tar)
+            # print("z_tar: ", z_tar)
+            print("logvar_o: ", logvar_o)
+            print("logvar_tar: ", logvar_tar)
 
 
         return kl_loss, distance_loss, iso_kl_loss, embedding_o
@@ -116,10 +134,16 @@ class MOCO(nn.Module):
         init.zeros_(self.online.var.weight)
         init.zeros_(self.online.mean.weight)
 
+    def my_activation(self, x):
+        return 1 - torch.pow(1 + torch.pow(x, 3) + 0.001, -1)
+
 
     def forward(self, x1, x2=None, weight=0):
         if x2 is None:
             return self.online(x1)
+        
+        with torch.no_grad():  # no gradient to keys
+            self.update_moving_average()
 
         kl_loss1, distance_loss1, iso_kl_loss1, embedding_o1 = self.forward_once(x1)
         kl_loss2, distance_loss2, iso_kl_loss2, embedding_o2 = self.forward_once(x2)
@@ -129,30 +153,23 @@ class MOCO(nn.Module):
         iso_kl_total = iso_kl_loss1 + iso_kl_loss2
         distance_total = distance_loss1 + distance_loss2
         # if weight > 0:
-        kl_total *= 0.001
-        iso_kl_total *= 0.001
+        # kl_total *= 0.001
+        iso_kl_total *= 0.00001
         # distance_total *= 
 
-        total_loss =  distance_total + iso_kl_total
+        losses = [torch.clone(kl_total), torch.clone(iso_kl_total), torch.clone(distance_total)]
+        
+        # iso_kl_total = self.my_activation(torch.abs(iso_kl_total))
+        # kl_total = self.my_activation(torch.abs(kl_total))    
+        # distance_total = self.my_activation(torch.abs(distance_total))
+
+        total_loss = iso_kl_total + distance_total
 
         # print("kl_loss: ", kl_total)
         # print("distance_total: ", distance_total)
         # print("iso_kl_total: ", iso_kl_total)
 
-        return(embedding_o1, embedding_o2), total_loss, [iso_kl_total, kl_total, distance_total]
-
-def find_inf_nan_indices(tensor):
-    # Check for inf and nan values
-    is_inf = torch.isinf(tensor)
-    is_nan = torch.isnan(tensor)
-
-    # Combine the masks to find the indices where either inf or nan is present
-    inf_nan_mask = torch.logical_or(is_inf, is_nan)
-
-    # Get the indices where inf or nan is present
-    indices = torch.nonzero(inf_nan_mask)
-
-    return indices
+        return(embedding_o1, embedding_o2), total_loss, losses
 # temp1 = torch.rand((6, 3, 32, 32))
 # temp2 = torch.rand((6, 3, 32, 32))
 # temp_model = MOCO()

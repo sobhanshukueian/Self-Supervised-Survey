@@ -10,21 +10,21 @@ model_config = dict(
     VERBOSE = 2,
     SAVE_PLOTS = True,
     VISUALIZE_PLOTS = False,
-    SAVE_DIR = "./mocoo/run",
-    MODEL_NAME = "MOCOO",
+    SAVE_DIR = "./moco/run",
+    MODEL_NAME = "MOCO",
     WEIGHTS = None,
-    OPTIMIZER = "SGD",
+    OPTIMIZER = "AdamW",
     EVALUATION_FREQ = 1,
     HIDDEN_SIZE = 4096,
     EMBEDDING_SIZE = 256,
     RESUME = False,
     RESUME_DIR= "/content/drive/MyDrive/byol/run",
-    MOMENTUM=0.9,
-    LEARNING_RATE=0.05,
+    MOMENTUM=0.99,
+    LEARNING_RATE=0.002,
     WEIGHT_DECAY = 0.00005,
     USE_SCHEDULER = False,
     WARM_UP = 0,
-    # Description = "Distance And KLD loss without ISOKLD"
+    Description = "All terms with activation"
 )
 
 # Linear Evaluation Config

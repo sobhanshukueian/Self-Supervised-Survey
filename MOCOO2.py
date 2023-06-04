@@ -72,7 +72,9 @@ class Trainer:
         # 0 == nothing || 1 == model architecture || 2 == print optimizer || 3 == model parameters
         self.verbose = verbose
         self.train_losses=[]
+        self.train_losses_s=[]
         self.val_losses=[]
+        self.val_losses_s=[]
         self.conf = {'Basic configs': model_config, 'Max_iter_num' : '', 'Epochs' : self.epochs, 'Trained_epoch' : 0, 'Optimizer' : '', 'Parameter_size' : '', "Model" : ''}
         self.ckpt = False
         self.resume = resume
@@ -101,7 +103,7 @@ class Trainer:
 
 
         # get model 
-        self.model, self.conf, self.ckpt = get_model("MOCOO", self.conf, self.resume, self.resume_dir, self.weights, self.verbose)
+        self.model, self.conf, self.ckpt = get_model("MOCOO2", self.conf, self.resume, self.resume_dir, self.weights, self.verbose)
         self.model = self.model.to(device)
 
         if self.verbose > 2:
@@ -144,13 +146,13 @@ class Trainer:
 
         image1, image2, targets = self.prepro_data(batch_data, self.device, True)
         
-        preds, loss = self.model(image1, image2)
+        preds, loss, losses = self.model(image1, image2)
 
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
-        return loss.cpu().detach().numpy()#, [pred.cpu().detach().numpy() for pred in preds]#, targets.cpu().detach().numpy()
+        return loss.cpu().detach().numpy(), [loss.cpu().detach().numpy() for loss in losses]#, [pred.cpu().detach().numpy() for pred in preds]#, targets.cpu().detach().numpy()
 
 
     # Each Validation Step
@@ -159,9 +161,9 @@ class Trainer:
         image1, image2, targets = self.prepro_data(batch_data, self.device, True)
 
         # forward
-        preds, loss = self.model(image1, image2)
+        preds, loss, losses = self.model(image1, image2)
 
-        return loss.cpu().detach().numpy(), [pred.cpu().detach().numpy() for pred in preds], targets.cpu().detach().numpy()
+        return loss.cpu().detach().numpy(), [pred.cpu().detach().numpy() for pred in preds], targets.cpu().detach().numpy(), [loss.cpu().detach().numpy() for loss in losses]
 
     # Training Process
     def train(self):
@@ -186,8 +188,10 @@ class Trainer:
                     pbar = tqdm(pbar, desc=('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss'), total=self.max_stepnum)                        
 
                     for step, batch_data in pbar:
-                        train_loss = self.train_step(batch_data)
-                        if self.epoch != 0: self.train_losses.append(train_loss)
+                        train_loss, train_losses = self.train_step(batch_data)
+                        if self.epoch != 0: 
+                            self.train_losses.append(train_loss)
+                            self.train_losses_s.append(train_losses)
                         
                     print('%20s' * 3  % ("Train", f'{self.epoch}/{self.epochs}', train_loss.item()))                 
                     del pbar
@@ -203,9 +207,11 @@ class Trainer:
                         vbar = enumerate(self.valid_loader)
                         vbar = tqdm(vbar, desc=('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss'), total=len(self.valid_loader))
                         for step, batch_data in vbar:
-                            self.val_loss, val_embeds, val_targets = self.val_step(batch_data)
+                            self.val_loss, val_embeds, val_targets, val_losses = self.val_step(batch_data)
 
-                            if self.epoch != 0: self.val_losses.append(self.val_loss)
+                            if self.epoch != 0: 
+                                self.val_losses.append(self.val_loss)
+                                self.val_losses_s.append(val_losses)
 
                             val_embeddings.extend(val_embeds[0])
                             val_labels.extend(val_targets)
@@ -244,24 +250,49 @@ class Trainer:
             print(f'\nTraining completed in {time.ctime(finish_time)} \nIts Done in: {(time.time() - self.start_time) / 3600:.3f} hours.') 
     # -------------------------------------------------------Training Callback after each epoch--------------------------
     def plot_loss(self, train_mean_size=1, val_mean_size=1):
-        COLS=3
-        ROWS=1
+        FIRST_ = "Contrastive Loss1"
+        SECOND_ = "Contrastive Loss2"
+        THIRD_ = "ISOKLD LOSS"
+
+        COLS=5
+        ROWS=2
         LINE_WIDTH = 2
         fig, ax = plt.subplots(ROWS, COLS, figsize=(COLS*10, ROWS*10))
         fig.suptitle("Losses Plot", fontsize=16)
 
         # train_mean_size = self.max_stepnum/self.batch_size
-        ax[0].plot(np.arange(len(self.train_losses) / train_mean_size), np.mean(np.array(self.train_losses).reshape(-1, train_mean_size), axis=1), 'r',  label="training loss", linewidth=LINE_WIDTH)
-        ax[0].set_title("Training Loss")
+        ax[0, 0].plot(np.array(self.train_losses),  label="Training loss", linewidth=LINE_WIDTH+1)
+        ax[0, 1].plot(np.array(self.train_losses_s)[:, 0], 'b--',  label=FIRST_, linewidth=LINE_WIDTH-1)
+        ax[0, 2].plot(np.array(self.train_losses_s)[:, 1], 'g--',  label=SECOND_, linewidth=LINE_WIDTH-1)
+        ax[0, 3].plot(np.array(self.train_losses_s)[:, 2], 'r--',  label=THIRD_, linewidth=LINE_WIDTH-1)
 
-        val_mean_size = len(self.valid_loader)
-        ax[1].plot(np.arange(len(self.val_losses) / val_mean_size), np.mean(np.array(self.val_losses).reshape(-1, val_mean_size), axis=1), 'g',  label="validation loss", linewidth=LINE_WIDTH)
-        ax[1].set_title("Validation Loss")
+        ax[0, 4].plot(np.array(self.train_losses),  label="Training loss", linewidth=LINE_WIDTH+1)
+        ax[0, 4].plot(np.array(self.train_losses_s)[:, 0], 'b--',  label=FIRST_, linewidth=LINE_WIDTH-1)
+        ax[0, 4].plot(np.array(self.train_losses_s)[:, 1], 'g--',  label=SECOND_, linewidth=LINE_WIDTH-1)
+        ax[0, 4].plot(np.array(self.train_losses_s)[:, 2], 'r--',  label=THIRD_, linewidth=LINE_WIDTH-1)
 
-        train_mean_size = self.max_stepnum
-        ax[2].plot(np.arange(len(self.train_losses) / train_mean_size), np.mean(np.array(self.train_losses).reshape(-1, train_mean_size), axis=1), 'r',  label="training loss", linewidth=LINE_WIDTH)
-        ax[2].plot(np.arange(len(self.val_losses) / val_mean_size), np.mean(np.array(self.val_losses).reshape(-1, val_mean_size), axis=1), 'g',  label="validation loss", linewidth=LINE_WIDTH)
-        ax[2].set_title("Train Validation Loss")
+        ax[0, 0].set_title("Train Loss")
+        ax[0, 1].set_title(FIRST_)
+        ax[0, 2].set_title(SECOND_)
+        ax[0, 3].set_title(THIRD_)
+        ax[0, 4].legend()
+
+        # val_mean_size = len(self.valid_loader)
+        ax[1, 0].plot(np.array(self.val_losses),  label="Validation loss", linewidth=LINE_WIDTH+1)
+        ax[1, 1].plot(np.array(self.val_losses_s)[:, 0], 'b--',  label=FIRST_, linewidth=LINE_WIDTH-1)
+        ax[1, 2].plot(np.array(self.val_losses_s)[:, 1], 'g--',  label=SECOND_, linewidth=LINE_WIDTH-1)
+        ax[1, 3].plot(np.array(self.val_losses_s)[:, 2], 'r--',  label=THIRD_, linewidth=LINE_WIDTH-1)
+
+        ax[1, 4].plot(np.array(self.val_losses),  label="Validation loss", linewidth=LINE_WIDTH+1)
+        ax[1, 4].plot(np.array(self.val_losses_s)[:, 0], 'b--',  label=FIRST_, linewidth=LINE_WIDTH-1)
+        ax[1, 4].plot(np.array(self.val_losses_s)[:, 1], 'g--',  label=SECOND_, linewidth=LINE_WIDTH-1)
+        ax[1, 4].plot(np.array(self.val_losses_s)[:, 2], 'r--',  label=THIRD_, linewidth=LINE_WIDTH-1)
+        
+        ax[1, 0].set_title("Train Loss")
+        ax[1, 1].set_title(FIRST_)
+        ax[1, 2].set_title(SECOND_)
+        ax[1, 3].set_title(THIRD_)
+        ax[1, 4].legend()
 
         if self.save_plots:
             save_plot_dir = osp.join(self.save_dir, 'plots') 
@@ -270,7 +301,6 @@ class Trainer:
             plt.savefig("{}/epoch-{}-loss-plot.png".format(save_plot_dir, self.epoch)) 
         if self.visualize_plots:
             plt.show()
-
     def plot_embeddings(self, val_embeddings, val_labels, val_plot_size=0):
         if val_plot_size > 0:
             val_embeddings = np.array(val_embeddings[:val_plot_size])
