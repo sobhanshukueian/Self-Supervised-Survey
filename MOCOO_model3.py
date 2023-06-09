@@ -54,7 +54,7 @@ class MOCOOOOOOO(nn.Module):
 
         # create the encoders
         self.encoder_q = self.get_backbone()
-        self.encoder_q.projection = self.get_mlp_block()
+        # self.encoder_q.projection = self.get_mlp_block()
         self.encoder_q.mean = nn.Linear(model_config["EMBEDDING_SIZE"], model_config["EMBEDDING_SIZE"])
         self.encoder_q.var = nn.Linear(model_config["EMBEDDING_SIZE"], model_config["EMBEDDING_SIZE"])
         
@@ -64,7 +64,7 @@ class MOCOOOOOOO(nn.Module):
 
 
         self.encoder_k = self.get_backbone()
-        self.encoder_k.projection = self.get_mlp_block()
+        # self.encoder_k.projection = self.get_mlp_block()
         self.encoder_k.mean = nn.Linear(model_config["EMBEDDING_SIZE"], model_config["EMBEDDING_SIZE"])
         self.encoder_k.var = nn.Linear(model_config["EMBEDDING_SIZE"], model_config["EMBEDDING_SIZE"])
 
@@ -168,7 +168,7 @@ class MOCOOOOOOO(nn.Module):
         # compute query features
         q = self.encoder_q(im_q)  # queries: NxC
         q = nn.functional.normalize(q, dim=1)  # already normalized
-        q_projected = self.encoder_q.projection(q)
+        # q_projected = self.encoder_q.projection(q)
 
         # compute key features
         with torch.no_grad():  # no gradient to keys
@@ -180,15 +180,15 @@ class MOCOOOOOOO(nn.Module):
 
             # undo shuffle
             k = self._batch_unshuffle_single_gpu(k, idx_unshuffle)
-            k_projected = self.encoder_k.projection(k)
+            # k_projected = self.encoder_k.projection(k)
 
 
         # compute logits
         # Einstein sum is more intuitive
         # positive logits: Nx1
-        l_pos = torch.einsum('nc,nc->n', [q_projected, k_projected]).unsqueeze(-1)
+        l_pos = torch.einsum('nc,nc->n', [q, k]).unsqueeze(-1)
         # negative logits: NxK
-        l_neg = torch.einsum('nc,ck->nk', [q_projected, self.queue.clone().detach()])
+        l_neg = torch.einsum('nc,ck->nk', [q, self.queue.clone().detach()])
 
         # logits: Nx(1+K)
         logits = torch.cat([l_pos, l_neg], dim=1)
@@ -201,7 +201,7 @@ class MOCOOOOOOO(nn.Module):
         
         loss = nn.CrossEntropyLoss().cuda()(logits, labels)
 
-        return loss, q, k_projected
+        return loss, q, k
 
     def forward(self, im1, im2):
         """
