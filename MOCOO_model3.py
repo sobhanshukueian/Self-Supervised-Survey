@@ -9,7 +9,6 @@ import torch.nn.init as init
 
 
 from configs import model_config
-from utils import update_momentum, initialize_keys, weights_init_zero
 import copy
 
 class ModelBase(nn.Module):
@@ -48,30 +47,30 @@ class ModelBase(nn.Module):
 class MOCOOOOOOO(nn.Module):
     def __init__(self, K=4000, m=0.99, T=0.1):
         super(MOCOOOOOOO, self).__init__()
+
         self.K = K
+        self.m = m
         self.T = T
 
         # create the encoders
-        self.q_backbone = self.get_backbone()
-        self.q_projection = self.get_mlp_block()
-        self.q_mean = self.get_mlp_block()
-        self.q_var = self.get_mlp_block()
+        self.encoder_q = self.get_backbone()
+        self.encoder_q.projection = self.get_mlp_block()
+        self.encoder_q.mean = nn.Linear(model_config["EMBEDDING_SIZE"], model_config["EMBEDDING_SIZE"])
+        self.encoder_q.var = nn.Linear(model_config["EMBEDDING_SIZE"], model_config["EMBEDDING_SIZE"])
         
-        # init.zeros_(self.encoder_q.var.weight)
-        # init.zeros_(self.encoder_q.mean.weight)
-        # weights_init_zero(q_mean)
-        # weights_init_zero(q_var)
-        # print()
+        
+        init.zeros_(self.encoder_q.var.weight)
+        init.zeros_(self.encoder_q.mean.weight)
 
-        self.k_backbone = self.get_backbone()
-        self.k_projection = self.get_mlp_block()
-        self.k_mean = self.get_mlp_block()
-        self.k_var = self.get_mlp_block()
 
-        initialize_keys(self.q_backbone, self.k_backbone)
-        initialize_keys(self.q_projection, self.k_projection)
-        initialize_keys(self.q_mean, self.k_mean)
-        initialize_keys(self.q_var, self.k_var)
+        self.encoder_k = self.get_backbone()
+        self.encoder_k.projection = self.get_mlp_block()
+        self.encoder_k.mean = nn.Linear(model_config["EMBEDDING_SIZE"], model_config["EMBEDDING_SIZE"])
+        self.encoder_k.var = nn.Linear(model_config["EMBEDDING_SIZE"], model_config["EMBEDDING_SIZE"])
+
+        for param_q, param_k in zip(self.encoder_q.parameters(), self.encoder_k.parameters()):
+            param_k.data.copy_(param_q.data)  # initialize
+            param_k.requires_grad = False  # not update by gradient
 
         # create the queue
         self.register_buffer("queue", torch.randn(model_config["EMBEDDING_SIZE"], K))
@@ -82,15 +81,14 @@ class MOCOOOOOOO(nn.Module):
         self.LeakyReLU = nn.LeakyReLU(0.2)
 
 
+
     @torch.no_grad()
     def  _momentum_update_key_encoder(self):
         """
         Momentum update of the key encoder
-        """ 
-        update_momentum(self.q_backbone, self.k_backbone)
-        update_momentum(self.q_projection, self.k_projection)
-        update_momentum(self.q_mean, self.k_mean)
-        update_momentum(self.q_var, self.k_var)
+        """
+        for param_q, param_k in zip(self.encoder_q.parameters(), self.encoder_k.parameters()):
+            param_k.data = param_k.data * self.m + param_q.data * (1. - self.m)
 
 
     @torch.no_grad()
@@ -135,37 +133,54 @@ class MOCOOOOOOO(nn.Module):
         )
 
     def get_backbone(self):
-        backbone = ModelBase(arch="resnet50", feature_dim=model_config["EMBEDDING_SIZE"])
+        backbone = ModelBase(arch="resnet18", feature_dim=model_config["EMBEDDING_SIZE"])
         return backbone
 
     def iso_kl(self, mean, log_var):
         return - 0.5 * torch.sum(1+ log_var - mean.pow(2) - log_var.exp())
 
-    def disentangled_contrastive_loss(self, im_q, im_k):
+    def disentanglement(self, im_q, im_k):
         # compute query features
-        q = self.q_backbone(im_q)  # queries: NxC
+        q = self.encoder_q(im_q)  # queries: NxC
         q = nn.functional.normalize(q, dim=1)  # already normalized
+        q_mean = self.encoder_q.mean(q)
+        q_var = self.encoder_q.var(q)
 
-        q_projected = self.q_projection(q) #project
+        with torch.no_grad():  # no gradient to keys
+            # shuffle for making use of BN
+            im_k_, idx_unshuffle = self._batch_shuffle_single_gpu(im_k)
 
-        #Disentanglement
-        q_mean = self.q_mean(self.LeakyReLU(q))
-        q_var = self.q_var(self.LeakyReLU(q))
+            k = self.encoder_k(im_k_)  # keys: NxC
+            k = nn.functional.normalize(k, dim=1)  # already normalized
+
+            # undo shuffle
+            k = self._batch_unshuffle_single_gpu(k, idx_unshuffle)
+
+            k_mean = self.encoder_k.mean(k)
+            k_var = self.encoder_k.var(k)
+
+        iso_kl_loss = self.iso_kl(q_mean, q_var)
+        iso_kl_loss += self.iso_kl(k_mean, k_var)
+
+        return iso_kl_loss
+
+    def contrastive_loss(self, im_q, im_k):
+        # compute query features
+        q = self.encoder_q(im_q)  # queries: NxC
+        q = nn.functional.normalize(q, dim=1)  # already normalized
+        q_projected = self.encoder_q.projection(q)
 
         # compute key features
         with torch.no_grad():  # no gradient to keys
             # shuffle for making use of BN
             im_k_, idx_unshuffle = self._batch_shuffle_single_gpu(im_k)
 
-            k = self.k_backbone(im_k_)  # keys: NxC
+            k = self.encoder_k(im_k_)  # keys: NxC
             k = nn.functional.normalize(k, dim=1)  # already normalized
-            k_projected = self.k_projection(k) # project k
 
             # undo shuffle
             k = self._batch_unshuffle_single_gpu(k, idx_unshuffle)
-            
-            k_mean = self.k_mean(self.LeakyReLU(k))
-            k_var = self.k_var(self.LeakyReLU(k))
+            k_projected = self.encoder_k.projection(k)
 
 
         # compute logits
@@ -186,10 +201,7 @@ class MOCOOOOOOO(nn.Module):
         
         loss = nn.CrossEntropyLoss().cuda()(logits, labels)
 
-        iso_kl_loss = self.iso_kl(q_mean, q_var)
-        iso_kl_loss += self.iso_kl(k_mean, k_var)
-
-        return loss, iso_kl_loss, q, k_projected
+        return loss, q, k_projected
 
     def forward(self, im1, im2):
         """
@@ -205,21 +217,23 @@ class MOCOOOOOOO(nn.Module):
             self._momentum_update_key_encoder()
 
         # compute loss
-        loss_12, iso_kl_loss12, q1, k2 = self.disentangled_contrastive_loss(im1, im2)
-        loss_21, iso_kl_loss21, q2, k1 = self.disentangled_contrastive_loss(im2, im1)
+        loss_12, q1, k2 = self.contrastive_loss(im1, im2)
+        loss_21, q2, k1 = self.contrastive_loss(im2, im1)
 
-        iso_kl_loss12 *= 0.001
-        iso_kl_loss21 *= 0.001
-        iso_kl_total = iso_kl_loss12 + iso_kl_loss21
+        iso_kl_loss1 = self.disentanglement(im1, im2)
+        iso_kl_loss2 = self.disentanglement(im2, im1)
+        iso_kl_loss1 *= 0.001
+        iso_kl_loss2 *= 0.001
+        iso_kl_total = iso_kl_loss1 + iso_kl_loss2
 
         loss = loss_12 + loss_21 + iso_kl_total
         k = torch.cat([k1, k2], dim=0)
 
         self._dequeue_and_enqueue(k)
 
-        return (q1, k1), loss, [loss_12, loss_21, iso_kl_total]
+        return (q1, q2), loss, [loss_12, loss_21, iso_kl_total]
 
 # create model
-model = MOCOOOOOOO().cuda()
-model._momentum_update_key_encoder()
+# model = ModelMoCo().cuda()
+    
 # print(model.encoder_q)
