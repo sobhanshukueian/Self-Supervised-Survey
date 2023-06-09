@@ -225,7 +225,7 @@ class Trainer:
                         # PLot Embeddings
                         self.plot_embeddings(np.array(val_embeddings), np.array(val_labels), 0)
 
-                        knn_acc = knn_monitor(self.model.encoder_q, self.train_val_loader, self.valid_loader, self.epoch, k=200, hide_progress=False)
+                        knn_acc = knn_monitor(self.model.q_backbone, self.train_val_loader, self.valid_loader, self.epoch, k=200, hide_progress=False)
 
                         # # Delete Data after PLotting
                         del val_embeddings, val_labels

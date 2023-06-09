@@ -16,7 +16,8 @@ from BYOL_PA_model import BYOLPANetwork
 from MOCO_model2 import MOCO
 from configs import model_config
 from MOCOO_model import ModelMoCo
-from MOCOO_model2 import MOCOOOOOOO
+from MOCOO_model3 import MOCOOOOOOO
+
 
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import accuracy_score

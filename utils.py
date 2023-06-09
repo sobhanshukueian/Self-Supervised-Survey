@@ -283,3 +283,18 @@ def adjust_learning_rate(optimizer, epoch, learning_rate):
 
 def adjust_loss_weights(epoch):
     return 0.5 * ( 1. + math.cos(0.1*epoch)) * 100000
+
+def update_momentum(updated_params, updatable_params, m=0.99):
+    for updated, updatable in zip(updated_params.parameters(), updatable_params.parameters()):
+        updatable.data = updatable.data * m + updated.data * (1. - m)
+
+def initialize_keys(query, key):
+    for param_q, param_k in zip(query.parameters(), key.parameters()):
+        param_k.data.copy_(param_q.data)  # initialize
+        param_k.requires_grad = False  # not update by gradient
+
+
+def weights_init_zero(m):
+    if isinstance(m, nn.Linear):
+        torch.nn.init.zeros_(m.weight)
+        m.bias.data.fill_(0)
