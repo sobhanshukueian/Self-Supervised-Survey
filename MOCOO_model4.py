@@ -1,4 +1,4 @@
-# MOCO With Projection Layer
+# MOCO VAR With Projection Layer
 
 import torch.nn as nn
 import torch
@@ -141,14 +141,14 @@ class MOCOOOOOOO(nn.Module):
     def iso_kl(self, mean, log_var):
         return - 0.5 * torch.sum(1+ log_var - mean.pow(2) - log_var.exp())
 
-    def contrastive_loss(self, im_q, im_k):
+    def disentangled_contrastive_loss(self, im_q, im_k):
         # compute query features
         q = self.encoder_q(im_q)  # queries: NxC
         q = nn.functional.normalize(q, dim=1)  # already normalized
         q_projected = self.encoder_q.projection(q)
 
-        # q_mean = self.encoder_q.mean(q)
-        # q_var = self.encoder_q.var(q)
+        q_mean = self.encoder_q.mean(q)
+        q_var = self.encoder_q.var(q)
 
         # compute key features
         with torch.no_grad():  # no gradient to keys
@@ -162,12 +162,11 @@ class MOCOOOOOOO(nn.Module):
             k = self._batch_unshuffle_single_gpu(k, idx_unshuffle)
             k_projected = self.encoder_k.projection(k)
 
+            k_mean = self.encoder_k.mean(k)
+            k_var = self.encoder_k.var(k)
 
-        #     k_mean = self.encoder_k.mean(k)
-        #     k_var = self.encoder_k.var(k)
-
-        # iso_kl_loss = self.iso_kl(q_mean, q_var)
-        # iso_kl_loss += self.iso_kl(k_mean, k_var)
+        iso_kl_loss = self.iso_kl(q_mean, q_var)
+        iso_kl_loss += self.iso_kl(k_mean, k_var)
 
         # compute logits
         # Einstein sum is more intuitive
@@ -190,7 +189,7 @@ class MOCOOOOOOO(nn.Module):
         
         loss = nn.CrossEntropyLoss().cuda()(logits, labels)
 
-        return loss, q, k_projected
+        return loss, q, k_projected, iso_kl_loss
 
     def forward(self, im1, im2):
         """
@@ -206,22 +205,19 @@ class MOCOOOOOOO(nn.Module):
             self._momentum_update_key_encoder()
 
         # compute loss
-        loss_12, q1, k2 = self.contrastive_loss(im1, im2)
-        loss_21, q2, k1 = self.contrastive_loss(im2, im1)
+        loss_12, q1, k2, iso_kl_loss1 = self.disentangled_contrastive_loss(im1, im2)
+        loss_21, q2, k1, iso_kl_loss2 = self.disentangled_contrastive_loss(im2, im1)
 
-        # iso_kl_loss1 = self.disentanglement(im1, im2)
-        # iso_kl_loss2 = self.disentanglement(im2, im1)
-        # iso_kl_loss1 *= 0.001
-        # iso_kl_loss2 *= 0.001
-        # iso_kl_total = iso_kl_loss1 + iso_kl_loss2
-        iso_kl_total = 0
+        iso_kl_loss1 *= 0.001
+        iso_kl_loss2 *= 0.001
+        iso_kl_total = iso_kl_loss1 + iso_kl_loss2
 
-        loss = loss_12 + loss_21 
+        loss = loss_12 + loss_21 + iso_kl_total
         k = torch.cat([k1, k2], dim=0)
 
         self._dequeue_and_enqueue(k)
 
-        return (q1, q2), loss, [loss_12, loss_21, loss_21]
+        return (q1, q2), loss, [loss_12, loss_21, iso_kl_total]
 
 # create model
 # model = ModelMoCo().cuda()

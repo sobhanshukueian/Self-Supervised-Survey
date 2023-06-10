@@ -1,3 +1,5 @@
+# MOCO VAR without projection layer 
+
 import torch.nn as nn
 import torch
 import torchvision.utils

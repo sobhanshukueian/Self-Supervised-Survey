@@ -2,7 +2,7 @@ import torch
 
 # # BYOL Config
 model_config = dict(
-    batch_size=50,
+    batch_size=500,
     show_batch=False,
     show_batch_size=10,
     EPOCHS = 800,
@@ -10,13 +10,13 @@ model_config = dict(
     VERBOSE = 2,
     SAVE_PLOTS = True,
     VISUALIZE_PLOTS = False,
-    SAVE_DIR = "./mocooo/run",
+    SAVE_DIR = "/content/drive/MyDrive/mocooo/run",
     MODEL_NAME = "MOCOOO",
     WEIGHTS = None,
     OPTIMIZER = "AdamW",
     EVALUATION_FREQ = 1,
-    HIDDEN_SIZE = 4096,
-    EMBEDDING_SIZE = 1024,
+    HIDDEN_SIZE = 4096*2,
+    EMBEDDING_SIZE = 4096,
     PROJECTION_SIZE = 256,
     RESUME = False,
     RESUME_DIR= "./moco/run18",
