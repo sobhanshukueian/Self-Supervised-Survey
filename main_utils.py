@@ -12,11 +12,11 @@ import torch.nn as nn
 from utils import LARS
 from Barlow_model import BarlowTwins
 from BYOL_model import BYOLNetwork
-from BYOL_PA_model import BYOLPANetwork 
+# from BYOL_PA_model import BYOLPANetwork 
 from MOCO_model2 import MOCO
 from configs import model_config
 from MOCOO_model import ModelMoCo
-from MOCOO_model4 import MOCOOOOOOO
+from MOCOO_model3 import MOCOOOOOOO
 
 
 from sklearn.neighbors import KNeighborsClassifier
@@ -58,8 +58,8 @@ def get_model(name, conf, resume, save_dir="./", weights=None, device='cpu', ver
         model = BarlowTwins()
     elif name == "byol":
         model = BYOLNetwork()
-    elif name == "byol-pa":
-        model = BYOLPANetwork()
+    # elif name == "byol-pa":
+    #     model = BYOLPANetwork()
     elif name == "MOCO":
         model = MOCO()
     elif name == "MOCOO":

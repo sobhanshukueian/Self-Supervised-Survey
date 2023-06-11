@@ -11,40 +11,8 @@ import torch.nn.init as init
 
 
 from configs import model_config
+from MY_Backbone import MyBackbone
 import copy
-
-class ModelBase(nn.Module):
-    """
-    Common CIFAR ResNet recipe.
-    Comparing with ImageNet ResNet recipe, it:
-    (i) replaces conv1 with kernel=3, str=1
-    (ii) removes pool1
-    """
-    def __init__(self, feature_dim=128, arch=None):
-        super(ModelBase, self).__init__()
-
-        # use split batchnorm
-        norm_layer = nn.BatchNorm2d
-        resnet_arch = getattr(resnet, arch)
-        net = resnet_arch(num_classes=feature_dim, norm_layer=norm_layer)
-
-        self.net = []
-        for name, module in net.named_children():
-            if name == 'conv1':
-                module = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
-            if isinstance(module, nn.MaxPool2d):
-                continue
-            if isinstance(module, nn.Linear):
-                self.net.append(nn.Flatten(1))
-            self.net.append(module)
-
-        self.net = nn.Sequential(*self.net)
-
-    def forward(self, x):
-        x = self.net(x)
-        # note: not normalized here
-        return x
-
 
 class MOCOOOOOOO(nn.Module):
     def __init__(self, K=4000, m=0.99, T=0.1):
@@ -73,7 +41,7 @@ class MOCOOOOOOO(nn.Module):
             param_k.requires_grad = False  # not update by gradient
 
         # create the queue
-        self.register_buffer("queue", torch.randn(model_config["PROJECTION_SIZE"], K))
+        self.register_buffer("queue", torch.randn(model_config["EMBEDDING_SIZE"], K))
         self.queue = nn.functional.normalize(self.queue, dim=0)
 
         self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
@@ -133,7 +101,7 @@ class MOCOOOOOOO(nn.Module):
         )
 
     def get_backbone(self):
-        backbone = ModelBase(arch="resnet50", feature_dim=model_config["EMBEDDING_SIZE"])
+        backbone = MyBackbone()
         return backbone
 
     def iso_kl(self, mean, log_var):
@@ -143,6 +111,8 @@ class MOCOOOOOOO(nn.Module):
         # compute query features
         q = self.encoder_q(im_q)  # queries: NxC
         q = nn.functional.normalize(q, dim=1)  # already normalized
+
+        # print(q.size())
 
         q_mean = self.encoder_q.mean(q)
         q_var = self.encoder_q.var(q)
