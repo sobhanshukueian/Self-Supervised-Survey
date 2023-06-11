@@ -225,7 +225,7 @@ class Trainer:
                         # PLot Embeddings
                         self.plot_embeddings(np.array(val_embeddings), np.array(val_labels), 0)
 
-                        validation_model = self.model.encoder_q.clone()
+                        validation_model = deepcopy(self.model.encoder_q)
                         validation_model.fc = nn.Identity()
                         knn_acc = knn_monitor(validation_model, self.train_val_loader, self.valid_loader, self.epoch, k=200, hide_progress=False)
                         # knn_acc = knn_monitor(nn.Sequential(self.model.encoder_q, self.model.encoder_q.projection), self.train_val_loader, self.valid_loader, self.epoch, k=200, hide_progress=False)
