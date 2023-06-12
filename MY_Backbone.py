@@ -8,6 +8,8 @@ import torch.nn.functional as F
 
 from configs import model_config
 from Layers import *
+import torch.nn.init as init
+
         
 backbone=dict(
         type='Backbone',
@@ -58,9 +60,6 @@ num_repeat_head = head['num_repeat']
 repeat_backbone = [(max(round(i * depth_multiple), 1) if i > 1 else i) for i in num_repeat_backbone]
 repeat_neck = [(max(round(i * depth_multiple), 1) if i > 1 else i) for i in num_repeat_neck]
 repeat_head = [(max(round(i * depth_multiple), 1) if i > 1 else i) for i in num_repeat_head]
-
-
-
 
 
 class Backbone(nn.Module):
@@ -184,23 +183,22 @@ class MyBackbone(nn.Module):
         self.online.neck = Neck()
         self.online.head = Head()
 
-        self.sppf0 = SPPF(256, 256)
-        self.sppf1 = SPPF(256, 256)
-        self.sppf2 = SPPF(128, 256)
-
-        self.ss = Conv2D(in_ch=128, out_ch=256, kernel=2, stride=1, padding=0)
+        self.ss1 = Conv2D(in_ch=128, out_ch=256, kernel=2, stride=1, padding=0)
         self.ss0 = Conv2D(in_ch=64, out_ch=256, kernel=4, stride=1, padding=0)
-        self.ss2 = Conv2D(in_ch=128, out_ch=256, kernel=1, stride=1, padding=0)
+        self.ss2 = Conv2D(in_ch=128, out_ch=512, kernel=1, stride=1, padding=0)
 
-        self.mlp = self.get_mlp_block(in_ch=512+128)
+        self.fc = self.get_mlp_block(in_ch=1024)
 
 
     def get_mlp_block(self, in_ch):
         return nn.Sequential(
             nn.Linear(in_ch, model_config["HIDDEN_SIZE"]),
-            nn.BatchNorm2d(model_config["HIDDEN_SIZE"]),
-            nn.SiLU(inplace=True),
-            nn.Linear(model_config["HIDDEN_SIZE"], model_config["EMBEDDING_SIZE"])
+            nn.BatchNorm1d(model_config["HIDDEN_SIZE"]),
+            nn.ReLU(inplace=True),
+            nn.Linear(model_config["HIDDEN_SIZE"], model_config["HIDDEN_SIZE"]),
+            nn.BatchNorm1d(model_config["HIDDEN_SIZE"]),
+            nn.ReLU(inplace=True),
+            nn.Linear(model_config["HIDDEN_SIZE"], model_config["PROJECTION_SIZE"])
         )
 
     def forward(self, x1, x2=None, return_embedding=False):
@@ -211,19 +209,48 @@ class MyBackbone(nn.Module):
         x1 = self.online.head(x1)
         # print(x1[0].squeeze().size(), x1[1].squeeze().size(), x1[2].squeeze().size())
         x12 = self.ss2(x1[2])
-        x11 = self.ss(x1[1])
+        x11 = self.ss1(x1[1])
         x10 = self.ss0(x1[0])
 
-        # x12 = self.sppf2(x12)
-        # x11 = self.sppf1(x11)
-        # x10 = self.sppf0(x10)
 
         # print(x10.squeeze().size(), x11.squeeze().size(), x12.squeeze().size())
 
-        sss = torch.cat([x10, x11, x12], 1).squeeze()
+        sss0 = torch.cat([x10, x11, x12], 1).squeeze()
 
-        # sss = self.mlp(sss)
-        return sss
+        sss = self.fc(sss0)
+        return sss0, sss
+
+
+#create the Siamese Neural Network
+class GaussianProjection(nn.Module):
+
+    def __init__(self):
+        super(GaussianProjection, self).__init__()
+        self.projection = self.get_mlp_block(model_config["EMBEDDING_SIZE"])
+        self.mean = nn.Linear(model_config["PROJECTION_SIZE"], model_config["PROJECTION_SIZE"])
+        self.var = nn.Linear(model_config["PROJECTION_SIZE"], model_config["PROJECTION_SIZE"])
+
+        init.zeros_(self.var.weight)
+        init.zeros_(self.mean.weight)
+
+
+    def get_mlp_block(self, in_ch):
+        return nn.Sequential(
+            nn.Linear(in_ch, model_config["HIDDEN_SIZE"]),
+            nn.BatchNorm1d(model_config["HIDDEN_SIZE"]),
+            nn.ReLU(inplace=True),
+            nn.Linear(model_config["HIDDEN_SIZE"], model_config["HIDDEN_SIZE"]),
+            nn.BatchNorm1d(model_config["HIDDEN_SIZE"]),
+            nn.ReLU(inplace=True),
+            nn.Linear(model_config["HIDDEN_SIZE"], model_config["PROJECTION_SIZE"])
+        )
+
+    def forward(self, x1):
+        x1 = self.projection(x1)
+        x1_mean = self.mean(x1)
+        x1_var = self.var(x1)
+
+        return x1_mean, x1_var
 
 
 # temp1 = torch.rand((10, 3, 32, 32))
@@ -238,4 +265,4 @@ for name, parameter in temp_model.named_parameters():
     # table.add_row([name, params])
     total_params+=params
 
-print(total_params)
+# print(total_params)

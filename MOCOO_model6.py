@@ -1,4 +1,4 @@
-# MOCO VAR without projection layer  with My backbone
+# MOCO VAR with projection layer with My backbone
 
 import torch.nn as nn
 import torch
@@ -11,7 +11,7 @@ import torch.nn.init as init
 
 
 from configs import model_config
-from MY_Backbone import MyBackbone
+from MY_Backbone import MyBackbone, GaussianProjection
 import copy
 
 class MOCOOOOOOO(nn.Module):
@@ -23,31 +23,27 @@ class MOCOOOOOOO(nn.Module):
         self.T = T
 
         # create the encoders
-        self.encoder_q = self.get_backbone()
-        self.encoder_q.mean = nn.Linear(model_config["EMBEDDING_SIZE"], model_config["PROJECTION_SIZE"])
-        self.encoder_q.var = nn.Linear(model_config["EMBEDDING_SIZE"], model_config["PROJECTION_SIZE"])
-        
-        
-        init.zeros_(self.encoder_q.var.weight)
-        init.zeros_(self.encoder_q.mean.weight)
+        self.encoder_q = MyBackbone()
+        self.encoder_k = MyBackbone()
 
+        # # print(hidden_dim)
+        # self.encoder_q.fc = self.get_mlp_block(model_config["EMBEDDING_SIZE"])
+        # self.encoder_k.fc = self.get_mlp_block(model_config["EMBEDDING_SIZE"])
 
-        self.encoder_k = self.get_backbone()
-        self.encoder_k.mean = nn.Linear(model_config["EMBEDDING_SIZE"], model_config["PROJECTION_SIZE"])
-        self.encoder_k.var = nn.Linear(model_config["EMBEDDING_SIZE"], model_config["PROJECTION_SIZE"])
+        self.encoder_q_gaussian = GaussianProjection()
+        self.predictor = self.get_mlp_block(model_config["PROJECTION_SIZE"])
 
         for param_q, param_k in zip(self.encoder_q.parameters(), self.encoder_k.parameters()):
             param_k.data.copy_(param_q.data)  # initialize
             param_k.requires_grad = False  # not update by gradient
 
         # create the queue
-        self.register_buffer("queue", torch.randn(model_config["EMBEDDING_SIZE"], K))
+        self.register_buffer("queue", torch.randn(model_config["PROJECTION_SIZE"], K))
         self.queue = nn.functional.normalize(self.queue, dim=0)
 
         self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
 
         self.LeakyReLU = nn.LeakyReLU(0.2)
-
 
 
     @torch.no_grad()
@@ -92,47 +88,39 @@ class MOCOOOOOOO(nn.Module):
         """
         return x[idx_unshuffle]
 
-    def get_mlp_block(self):
+    def get_mlp_block(self, in_ch):
         return nn.Sequential(
-            nn.Linear(model_config["EMBEDDING_SIZE"], model_config["HIDDEN_SIZE"]),
+            nn.Linear(in_ch, model_config["HIDDEN_SIZE"]),
             nn.BatchNorm1d(model_config["HIDDEN_SIZE"]),
             nn.ReLU(inplace=True),
             nn.Linear(model_config["HIDDEN_SIZE"], model_config["PROJECTION_SIZE"])
         )
-
-    def get_backbone(self):
-        backbone = MyBackbone()
-        return backbone
 
     def iso_kl(self, mean, log_var):
         return - 0.5 * torch.sum(1+ log_var - mean.pow(2) - log_var.exp())
 
     def disentangled_contrastive_loss(self, im_q, im_k):
         # compute query features
-        q = self.encoder_q(im_q)  # queries: NxC
+        # print(self.encoder_q(im_q).size())
+        q0, q1 = self.encoder_q(im_q)
+        
+        q = self.predictor(q1)  # queries: NxC
         q = nn.functional.normalize(q, dim=1)  # already normalized
 
-        # print(q.size())
+        q_mean, q_var = self.encoder_q_gaussian(q0)
+        iso_kl_loss = self.iso_kl(q_mean, q_var)
 
-        q_mean = self.encoder_q.mean(q)
-        q_var = self.encoder_q.var(q)
 
         # compute key features
         with torch.no_grad():  # no gradient to keys
             # shuffle for making use of BN
             im_k_, idx_unshuffle = self._batch_shuffle_single_gpu(im_k)
 
-            k = self.encoder_k(im_k_)  # keys: NxC
+            _, k = self.encoder_k(im_k_)  # keys: NxC
             k = nn.functional.normalize(k, dim=1)  # already normalized
 
             # undo shuffle
             k = self._batch_unshuffle_single_gpu(k, idx_unshuffle)
-
-            k_mean = self.encoder_k.mean(k)
-            k_var = self.encoder_k.var(k)
-
-        iso_kl_loss = self.iso_kl(q_mean, q_var)
-        iso_kl_loss += self.iso_kl(k_mean, k_var)
 
         # compute logits
         # Einstein sum is more intuitive
@@ -174,8 +162,8 @@ class MOCOOOOOOO(nn.Module):
         loss_12, q1, k2, iso_kl_loss1 = self.disentangled_contrastive_loss(im1, im2)
         loss_21, q2, k1, iso_kl_loss2 = self.disentangled_contrastive_loss(im2, im1)
 
-        iso_kl_loss1 *= 0.001
-        iso_kl_loss2 *= 0.001
+        # iso_kl_loss1 *= 0.001
+        # iso_kl_loss2 *= 0.001
         iso_kl_total = iso_kl_loss1 + iso_kl_loss2
 
         loss = loss_12 + loss_21 + iso_kl_total
