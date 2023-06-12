@@ -17,6 +17,8 @@ from MOCO_model2 import MOCO
 from configs import model_config
 from MOCOO_model import ModelMoCo
 from MOCOO_model2 import MOCOOOOOOO
+from MOCOO_model3 import MOCO3
+
 
 
 from sklearn.neighbors import KNeighborsClassifier
@@ -67,6 +69,8 @@ def get_model(name, conf, resume, save_dir="./", weights=None, device='cpu', ver
         model = ModelMoCo()
     elif name == "MOCOO2":
         model = MOCOOOOOOO()
+    elif name == "MOCO3":
+        model = MOCO3()
     elif name == "supervised":
         model = torchvision.models.resnet50(pretrained=True, num_classes=model_config["EMBEDDING_SIZE"])
     elif name == "random":

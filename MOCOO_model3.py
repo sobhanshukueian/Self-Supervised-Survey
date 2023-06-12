@@ -47,9 +47,9 @@ class ModelBase(nn.Module):
         return x
 
 
-class MOCOOOOOOO(nn.Module):
+class MOCO3(nn.Module):
     def __init__(self, K=4000, m=0.99, T=0.1):
-        super(MOCOOOOOOO, self).__init__()
+        super(MOCO3, self).__init__()
 
         self.K = K
         self.m = m
@@ -157,13 +157,7 @@ class MOCOOOOOOO(nn.Module):
 
             # undo shuffle
             k = self._batch_unshuffle_single_gpu(k, idx_unshuffle)
-
-        #     k_mean = self.encoder_k.mean(k)
-        #     k_var = self.encoder_k.var(k)
-
-        # iso_kl_loss = self.iso_kl(q_mean, q_var)
-        # iso_kl_loss += self.iso_kl(k_mean, k_var)
-
+            
         # compute logits
         # Einstein sum is more intuitive
         # positive logits: Nx1
@@ -204,13 +198,6 @@ class MOCOOOOOOO(nn.Module):
         loss_12, q1, k2 = self.contrastive_loss(im1, im2)
         loss_21, q2, k1 = self.contrastive_loss(im2, im1)
 
-        # iso_kl_loss1 = self.disentanglement(im1, im2)
-        # iso_kl_loss2 = self.disentanglement(im2, im1)
-        # iso_kl_loss1 *= 0.001
-        # iso_kl_loss2 *= 0.001
-        # iso_kl_total = iso_kl_loss1 + iso_kl_loss2
-        iso_kl_total = 0
-
         loss = loss_12 + loss_21 
         k = torch.cat([k1, k2], dim=0)
 
@@ -222,18 +209,3 @@ class MOCOOOOOOO(nn.Module):
 # model = ModelMoCo().cuda()
     
 # print(model.encoder_q)
-
-# utils
-@torch.no_grad()
-def concat_all_gather(tensor):
-    """
-    Performs all_gather operation on the provided tensors.
-    *** Warning ***: torch.distributed.all_gather has no gradient.
-    """
-    tensors_gather = [
-        torch.ones_like(tensor) for _ in range(torch.distributed.get_world_size())
-    ]
-    torch.distributed.all_gather(tensors_gather, tensor, async_op=False)
-
-    output = torch.cat(tensors_gather, dim=0)
-    return output
