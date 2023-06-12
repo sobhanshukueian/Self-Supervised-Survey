@@ -13,7 +13,7 @@ from tqdm import tqdm
 import matplotlib
 import matplotlib.pyplot as plt
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
-from utils import CosineAnnealingWarmupRestarts
+from utils import CosineAnnealingWarmupRestarts, set_logging
 
 
 import torch
@@ -84,7 +84,6 @@ class Trainer:
         self.scheduler = False
         
 
-
         temm=0
         tmp_save_dir = self.save_dir
         while osp.exists(tmp_save_dir):
@@ -95,6 +94,7 @@ class Trainer:
         del temm
         print("Save Project in {} directory.".format(self.save_dir))
 
+        self.logger = set_logging(self.save_dir, self.model_name)
 
         # get data loader
         self.train_loader, self.valid_loader, self.train_val_loader = train_loader, valid_loader, train_val_loader
@@ -172,6 +172,8 @@ class Trainer:
             self.start_time = time.time()
             self.conf["Time"] = time.ctime(self.start_time)
             print('Start Training Process \nTime: {}'.format(time.ctime(self.start_time)))
+            self.logger.warning('Start Training Process \nTime: {}'.format(time.ctime(self.start_time)))
+
             self.best_loss = np.inf
             knns = []
 
@@ -186,14 +188,16 @@ class Trainer:
 
                     pbar = enumerate(self.train_loader)
                     pbar = tqdm(pbar, desc=('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss'), total=self.max_stepnum)                        
-
+                    self.logger.warning(('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss'))
                     for step, batch_data in pbar:
                         train_loss, train_losses = self.train_step(batch_data)
                         if self.epoch != 0: 
                             self.train_losses.append(train_loss)
                             self.train_losses_s.append(train_losses)
                         
-                    print('%20s' * 3  % ("Train", f'{self.epoch}/{self.epochs}', train_loss.item()))                 
+                    print('%20s' * 3  % ("Train", f'{self.epoch}/{self.epochs}', train_loss.item()))     
+                    self.logger.warning('%20s' * 3  % ("Train", f'{self.epoch}/{self.epochs}', train_loss.item()))                 
+
                     del pbar
             
                     # ############################################################Validation Loop
@@ -206,6 +210,8 @@ class Trainer:
                         # Validation Loop
                         vbar = enumerate(self.valid_loader)
                         vbar = tqdm(vbar, desc=('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss'), total=len(self.valid_loader))
+                        self.logger.warning(('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss'))
+
                         for step, batch_data in vbar:
                             self.val_loss, val_embeds, val_targets, val_losses = self.val_step(batch_data)
 
@@ -217,6 +223,8 @@ class Trainer:
                             val_labels.extend(val_targets)
 
                         print('%20s' * 3 % ("Validation", f'{self.epoch}/{self.epochs}', self.val_loss.item()))
+                        self.logger.warning('%20s' * 3 % ("Validation", f'{self.epoch}/{self.epochs}', self.val_loss.item()))
+
                         del vbar
 
                         # PLot Losses

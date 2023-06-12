@@ -10,6 +10,7 @@ from prettytable import PrettyTable
 from torch.optim.lr_scheduler import _LRScheduler
 import math
 import numpy as np
+import logging
 
 from configs import model_config
 import torch.nn as nn
@@ -298,3 +299,17 @@ def weights_init_zero(m):
     if isinstance(m, nn.Linear):
         torch.nn.init.zeros_(m.weight)
         m.bias.data.fill_(0)
+
+def set_logging(save_dir, name=None):
+    if not osp.exists(save_dir):
+        os.makedirs(save_dir)
+    logger = logging.getLogger(name)
+    # Create handlers
+    handler = logging.StreamHandler()
+    handler = logging.FileHandler(f'{save_dir}/{name}.log')
+    format = logging.Formatter('%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M')
+    handler.setFormatter(format)
+    handler.setLevel(logging.DEBUG)
+    logger.addHandler(handler)
+    logger.warning(f"{name} LOGGER")
+    return logger
