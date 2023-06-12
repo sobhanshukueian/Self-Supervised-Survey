@@ -25,7 +25,7 @@ model_config = dict(
     WEIGHT_DECAY = 0.00005,
     USE_SCHEDULER = False,
     WARM_UP = 0,
-    Description = "All terms with activation"
+    Description = "MOCO Implementation without Projection Layer"
 )
 
 # Linear Evaluation Config
