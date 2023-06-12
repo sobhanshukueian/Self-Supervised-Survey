@@ -235,7 +235,7 @@ class Trainer:
 
                         # validation_model = deepcopy(self.model.encoder_q)
                         # validation_model.fc = nn.Identity()
-                        knn_acc = knn_monitor(self.model.encoder_q, self.train_val_loader, self.valid_loader, self.epoch, k=200, hide_progress=False)
+                        knn_acc = knn_monitor(self.logger, self.model.encoder_q, self.train_val_loader, self.valid_loader, self.epoch, k=200, hide_progress=False)
                         # knn_acc = knn_monitor(nn.Sequential(self.model.encoder_q, self.model.encoder_q.projection), self.train_val_loader, self.valid_loader, self.epoch, k=200, hide_progress=False)
 
                         # # Delete Data after PLotting

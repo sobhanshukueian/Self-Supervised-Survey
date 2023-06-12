@@ -4,7 +4,7 @@ import torch
 
 # code copied from https://colab.research.google.com/github/facebookresearch/moco/blob/colab-notebook/colab/moco_cifar10_demo.ipynb#scrollTo=RI1Y8bSImD7N
 # test using a knn monitor
-def knn_monitor(model, train_val_loader, test_loader, epoch, k=200, t=0.1, hide_progress=False):
+def knn_monitor(logger, model, train_val_loader, test_loader, epoch, k=200, t=0.1, hide_progress=False):
     model.eval()
     classes = len(train_val_loader.dataset.classes)
     total_top1, total_top5, total_num, feature_bank = 0.0, 0.0, 0, []
@@ -31,6 +31,7 @@ def knn_monitor(model, train_val_loader, test_loader, epoch, k=200, t=0.1, hide_
             total_num += data.size(0)
             total_top1 += (pred_labels[:, 0] == target).float().sum().item()
             test_bar.set_postfix({'Accuracy':total_top1 / total_num * 100})
+            logger.warning({'Accuracy':total_top1 / total_num * 100})
     return total_top1 / total_num * 100
 
 
