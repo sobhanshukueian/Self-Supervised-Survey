@@ -6,6 +6,7 @@ import torchvision.utils
 import torchvision
 import torch.nn.functional as F
 from torchvision.models import resnet
+import torchvision.models as torchvision_models
 from functools import partial
 import torch.nn.init as init
 
@@ -55,8 +56,8 @@ class MOCOOOOOOO(nn.Module):
         self.T = T
 
         # create the encoders
-        self.encoder_q = partial(torchvision_models.__dict__["resnet50"], zero_init_residual=True)(num_classes=model_config["EMBEDDING_SIZE"])
-        self.encoder_k =  partial(torchvision_models.__dict__["resnet50"], zero_init_residual=True)(num_classes=model_config["EMBEDDING_SIZE"])
+        self.encoder_q = partial(torchvision_models.__dict__["resnet50"], zero_init_residual=True)(num_classes=model_config["PROJECTION_SIZE"])
+        self.encoder_k =  partial(torchvision_models.__dict__["resnet50"], zero_init_residual=True)(num_classes=model_config["PROJECTION_SIZE"])
         
 
         for param_q, param_k in zip(self.encoder_q.parameters(), self.encoder_k.parameters()):
@@ -64,7 +65,7 @@ class MOCOOOOOOO(nn.Module):
             param_k.requires_grad = False  # not update by gradient
 
         # create the queue
-        self.register_buffer("queue", torch.randn(model_config["EMBEDDING_SIZE"], K))
+        self.register_buffer("queue", torch.randn(model_config["PROJECTION_SIZE"], K))
         self.queue = nn.functional.normalize(self.queue, dim=0)
 
         self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
