@@ -55,8 +55,9 @@ class MOCOOOOOOO(nn.Module):
         self.T = T
 
         # create the encoders
-        self.encoder_q = self.get_backbone()
-        self.encoder_k = self.get_backbone()
+        self.encoder_q = partial(torchvision_models.__dict__["resnet50"], zero_init_residual=True)(num_classes=model_config["EMBEDDING_SIZE"])
+        self.encoder_k =  partial(torchvision_models.__dict__["resnet50"], zero_init_residual=True)(num_classes=model_config["EMBEDDING_SIZE"])
+        
 
         for param_q, param_k in zip(self.encoder_q.parameters(), self.encoder_k.parameters()):
             param_k.data.copy_(param_q.data)  # initialize
