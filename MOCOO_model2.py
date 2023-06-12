@@ -1,4 +1,4 @@
-# MOCO VAR without projection layer 
+# MOCO without projection layer 
 
 import torch.nn as nn
 import torch
@@ -111,7 +111,7 @@ class MOCOOOOOOO(nn.Module):
 
 
     def get_backbone(self):
-        backbone = ModelBase(arch="resnet18", feature_dim=model_config["EMBEDDING_SIZE"])
+        backbone = ModelBase(arch="resnet50", feature_dim=model_config["EMBEDDING_SIZE"])
         return backbone
 
 

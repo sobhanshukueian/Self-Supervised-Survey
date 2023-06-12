@@ -106,10 +106,10 @@ class Trainer:
         self.model, self.conf, self.ckpt = get_model("MOCOO2", self.conf, self.resume, self.resume_dir, self.weights, self.verbose)
         self.model = self.model.to(device)
 
-        if self.verbose > 2:
-            self.conf = count_parameters(self.model, self.conf)
+        # if self.verbose > 2:
+        self.conf = count_parameters(self.logger, self.model, self.conf)
 
-        self.optimizer, self.conf = get_optimizer(get_params_groups(self.model), self.conf, self.resume, self.ckpt, optimizer=OPTIMIZER, lr0=model_config["LEARNING_RATE"], momentum=model_config["MOMENTUM"], weight_decay=model_config["WEIGHT_DECAY"], verbose=self.verbose)
+        self.optimizer, self.conf = get_optimizer(self.logger, get_params_groups(self.model), self.conf, self.resume, self.ckpt, optimizer=OPTIMIZER, lr0=model_config["LEARNING_RATE"], momentum=model_config["MOMENTUM"], weight_decay=model_config["WEIGHT_DECAY"], verbose=self.verbose)
         # self.optimizer = torch.optim.SGD(get_params_groups(self.model), lr=0.06, weight_decay=5e-4, momentum=0.9)
 
         if self.resume:

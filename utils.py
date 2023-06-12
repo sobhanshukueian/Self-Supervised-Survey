@@ -131,7 +131,7 @@ class LinearClassifier(nn.Module):
         # linear layer
         return self.linear(x)
 
-def count_parameters(model, conf):
+def count_parameters(logger, model, conf):
     table = PrettyTable(["Modules", "Parameters"])
     total_params = 0
     for name, parameter in model.named_parameters():
@@ -141,6 +141,7 @@ def count_parameters(model, conf):
         total_params+=params
     print(table)
     print(f"Total Trainable Params: {total_params}")
+    logger.warning(f"Total Trainable Params: {total_params}")
     conf["Parameter_size"] = total_params
     return conf
 
