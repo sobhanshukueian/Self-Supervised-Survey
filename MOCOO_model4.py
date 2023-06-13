@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from torchvision.models import resnet
 from functools import partial
 import torch.nn.init as init
+import torchvision.models as torchvision_models
 
 
 from configs import model_config

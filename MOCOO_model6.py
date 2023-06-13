@@ -102,12 +102,12 @@ class MOCOOOOOOO(nn.Module):
     def disentangled_contrastive_loss(self, im_q, im_k):
         # compute query features
         # print(self.encoder_q(im_q).size())
-        q0, q1 = self.encoder_q(im_q)
+        q = self.encoder_q(im_q)
         
-        q = self.predictor(q1)  # queries: NxC
-        q = nn.functional.normalize(q, dim=1)  # already normalized
+        q_predicted = self.predictor(q)  # queries: NxC
+        q_predicted = nn.functional.normalize(q_predicted, dim=1)  # already normalized
 
-        q_mean, q_var = self.encoder_q_gaussian(q0)
+        q_mean, q_var = self.encoder_q_gaussian(q)
         iso_kl_loss = self.iso_kl(q_mean, q_var)
 
 
@@ -126,11 +126,11 @@ class MOCOOOOOOO(nn.Module):
         # Einstein sum is more intuitive
         # positive logits: Nx1
         # print(q_projected.size(), k_projected.size())
-        l_pos = torch.einsum('nc,nc->n', [q, k]).unsqueeze(-1)
+        l_pos = torch.einsum('nc,nc->n', [q_predicted, k]).unsqueeze(-1)
 
         # print(q_projected.size(), self.queue.clone().size())
         # negative logits: NxK
-        l_neg = torch.einsum('nc,ck->nk', [q, self.queue.clone().detach()])
+        l_neg = torch.einsum('nc,ck->nk', [q_predicted, self.queue.clone().detach()])
 
         # logits: Nx(1+K)
         logits = torch.cat([l_pos, l_neg], dim=1)
