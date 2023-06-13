@@ -14,9 +14,9 @@ from configs import model_config
 from MY_Backbone import MyBackbone, GaussianProjection
 import copy
 
-class MOCOOOOOOO(nn.Module):
+class MOCO6(nn.Module):
     def __init__(self, K=4000, m=0.99, T=0.1):
-        super(MOCOOOOOOO, self).__init__()
+        super(MOCO6, self).__init__()
 
         self.K = K
         self.m = m
