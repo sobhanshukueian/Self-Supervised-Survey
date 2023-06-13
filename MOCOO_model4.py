@@ -168,8 +168,8 @@ class MOCO4(nn.Module):
         loss_12, q1, k2, iso_kl_loss1 = self.disentangled_contrastive_loss(im1, im2)
         loss_21, q2, k1, iso_kl_loss2 = self.disentangled_contrastive_loss(im2, im1)
 
-        # iso_kl_loss1 *= 0.001
-        # iso_kl_loss2 *= 0.001
+        iso_kl_loss1 *= 0.001
+        iso_kl_loss2 *= 0.001
         iso_kl_total = iso_kl_loss1 + iso_kl_loss2
 
         loss = loss_12 + loss_21 + iso_kl_total
