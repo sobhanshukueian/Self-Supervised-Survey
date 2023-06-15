@@ -1,4 +1,4 @@
-# MOCO VAR with projection layer with My backbone
+# MOCO VAR with projection layer
 
 import torch.nn as nn
 import torch
@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from torchvision.models import resnet
 from functools import partial
 import torch.nn.init as init
+import torchvision.models as torchvision_models
 
 
 from configs import model_config
@@ -23,15 +24,10 @@ class MOCO6(nn.Module):
         self.T = T
 
         # create the encoders
-        self.encoder_q = MyBackbone()
-        self.encoder_k = MyBackbone()
-
-        # # print(hidden_dim)
-        # self.encoder_q.fc = self.get_mlp_block(model_config["EMBEDDING_SIZE"])
-        # self.encoder_k.fc = self.get_mlp_block(model_config["EMBEDDING_SIZE"])
+        self.encoder_q = partial(torchvision_models.__dict__["resnet50"], zero_init_residual=True)(num_classes=model_config["PROJECTION_SIZE"])
+        self.encoder_k =  partial(torchvision_models.__dict__["resnet50"], zero_init_residual=True)(num_classes=model_config["PROJECTION_SIZE"])
 
         self.encoder_q_gaussian = GaussianProjection()
-        self.predictor = self.get_mlp_block(model_config["PROJECTION_SIZE"])
 
         for param_q, param_k in zip(self.encoder_q.parameters(), self.encoder_k.parameters()):
             param_k.data.copy_(param_q.data)  # initialize
@@ -42,9 +38,6 @@ class MOCO6(nn.Module):
         self.queue = nn.functional.normalize(self.queue, dim=0)
 
         self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
-
-        self.LeakyReLU = nn.LeakyReLU(0.2)
-
 
     @torch.no_grad()
     def  _momentum_update_key_encoder(self):
@@ -88,14 +81,6 @@ class MOCO6(nn.Module):
         """
         return x[idx_unshuffle]
 
-    def get_mlp_block(self, in_ch):
-        return nn.Sequential(
-            nn.Linear(in_ch, model_config["HIDDEN_SIZE"]),
-            nn.BatchNorm1d(model_config["HIDDEN_SIZE"]),
-            nn.ReLU(inplace=True),
-            nn.Linear(model_config["HIDDEN_SIZE"], model_config["PROJECTION_SIZE"])
-        )
-
     def iso_kl(self, mean, log_var):
         return - 0.5 * torch.sum(1+ log_var - mean.pow(2) - log_var.exp())
 
@@ -103,9 +88,7 @@ class MOCO6(nn.Module):
         # compute query features
         # print(self.encoder_q(im_q).size())
         q = self.encoder_q(im_q)
-        
-        q_predicted = self.predictor(q)  # queries: NxC
-        q_predicted = nn.functional.normalize(q_predicted, dim=1)  # already normalized
+        q = nn.functional.normalize(q_predicted, dim=1)  # already normalized
 
         q_mean, q_var = self.encoder_q_gaussian(q)
         iso_kl_loss = self.iso_kl(q_mean, q_var)
@@ -116,7 +99,7 @@ class MOCO6(nn.Module):
             # shuffle for making use of BN
             im_k_, idx_unshuffle = self._batch_shuffle_single_gpu(im_k)
 
-            _, k = self.encoder_k(im_k_)  # keys: NxC
+            k = self.encoder_k(im_k_)  # keys: NxC
             k = nn.functional.normalize(k, dim=1)  # already normalized
 
             # undo shuffle
@@ -126,11 +109,11 @@ class MOCO6(nn.Module):
         # Einstein sum is more intuitive
         # positive logits: Nx1
         # print(q_projected.size(), k_projected.size())
-        l_pos = torch.einsum('nc,nc->n', [q_predicted, k]).unsqueeze(-1)
+        l_pos = torch.einsum('nc,nc->n', [q, k]).unsqueeze(-1)
 
         # print(q_projected.size(), self.queue.clone().size())
         # negative logits: NxK
-        l_neg = torch.einsum('nc,ck->nk', [q_predicted, self.queue.clone().detach()])
+        l_neg = torch.einsum('nc,ck->nk', [q, self.queue.clone().detach()])
 
         # logits: Nx(1+K)
         logits = torch.cat([l_pos, l_neg], dim=1)
@@ -162,8 +145,8 @@ class MOCO6(nn.Module):
         loss_12, q1, k2, iso_kl_loss1 = self.disentangled_contrastive_loss(im1, im2)
         loss_21, q2, k1, iso_kl_loss2 = self.disentangled_contrastive_loss(im2, im1)
 
-        # iso_kl_loss1 *= 0.001
-        # iso_kl_loss2 *= 0.001
+        iso_kl_loss1 *= 0.001
+        iso_kl_loss2 *= 0.001
         iso_kl_total = iso_kl_loss1 + iso_kl_loss2
 
         loss = loss_12 + loss_21 + iso_kl_total

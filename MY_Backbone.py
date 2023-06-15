@@ -227,7 +227,7 @@ class GaussianProjection(nn.Module):
 
     def __init__(self):
         super(GaussianProjection, self).__init__()
-        self.projection = self.get_mlp_block(model_config["EMBEDDING_SIZE"])
+        # self.projection = self.get_mlp_block(model_config["EMBEDDING_SIZE"])
         self.mean = nn.Linear(model_config["PROJECTION_SIZE"], model_config["PROJECTION_SIZE"])
         self.var = nn.Linear(model_config["PROJECTION_SIZE"], model_config["PROJECTION_SIZE"])
 
@@ -247,7 +247,7 @@ class GaussianProjection(nn.Module):
         )
 
     def forward(self, x1):
-        x1 = self.projection(x1)
+        # x1 = self.projection(x1)
         x1_mean = self.mean(x1)
         x1_var = self.var(x1)
 
