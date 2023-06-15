@@ -103,7 +103,7 @@ class Trainer:
 
 
         # get model 
-        self.model, self.conf, self.ckpt = get_model("MOCO4", self.conf, self.resume, self.resume_dir, self.weights, self.verbose)
+        self.model, self.conf, self.ckpt = get_model("MOCO5", self.conf, self.resume, self.resume_dir, self.weights, self.verbose)
         self.model = self.model.to(device)
 
         # if self.verbose > 2:
@@ -233,9 +233,7 @@ class Trainer:
                         # PLot Embeddings
                         self.plot_embeddings(np.array(val_embeddings), np.array(val_labels), 0)
 
-                        validation_model = deepcopy(self.model.encoder_q)
-                        validation_model.fc = nn.Identity()
-                        knn_acc = knn_monitor(self.logger, validation_model, self.train_val_loader, self.valid_loader, self.epoch, k=200, hide_progress=False)
+                        knn_acc = knn_monitor(self.logger, self.model.encoder_q, self.train_val_loader, self.valid_loader, self.epoch, k=200, hide_progress=False)
                         # knn_acc = knn_monitor(nn.Sequential(self.model.encoder_q, self.model.encoder_q.projection), self.train_val_loader, self.valid_loader, self.epoch, k=200, hide_progress=False)
 
                         # # Delete Data after PLotting

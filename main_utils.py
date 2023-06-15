@@ -76,6 +76,8 @@ def get_model(name, conf, resume, save_dir="./", weights=None, device='cpu', ver
         model = MOCO3()
     elif name == "MOCO4":
         model = MOCO4()
+    elif name == "MOCO5":
+        model = MOCO5()
     elif name == "MOCO6":
         model = MOCO6()
     elif name == "supervised":

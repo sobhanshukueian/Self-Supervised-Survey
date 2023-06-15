@@ -42,7 +42,6 @@ channels_neck = [make_divisible(i * width_multiple, 8) for i in channel_list_nec
 channels_head = [make_divisible(i * width_multiple, 8) for i in channel_list_head]
 
 
-
 # channels_backbone =channel_list_backbone
 # channels_neck = channel_list_neck 
 # channels_head = channel_list_head 
@@ -182,12 +181,14 @@ class MyBackbone(nn.Module):
         self.online =  Backbone()
         self.online.neck = Neck()
         self.online.head = Head()
+        
+        # embedding_size = model_config["EMBEDDING_SIZE"]
 
-        self.ss1 = Conv2D(in_ch=128, out_ch=256, kernel=2, stride=1, padding=0)
-        self.ss0 = Conv2D(in_ch=64, out_ch=256, kernel=4, stride=1, padding=0)
-        self.ss2 = Conv2D(in_ch=128, out_ch=512, kernel=1, stride=1, padding=0)
+        self.ss1 = Conv2D(in_ch=128, out_ch=64, kernel=2, stride=1, padding=0)
+        self.ss0 = Conv2D(in_ch=64, out_ch=64, kernel=4, stride=1, padding=0)
+        self.ss2 = Conv2D(in_ch=128, out_ch=128, kernel=1, stride=1, padding=0)
 
-        self.fc = self.get_mlp_block(in_ch=1024)
+        # self.fc = self.get_mlp_block(in_ch=1024)
 
 
     def get_mlp_block(self, in_ch):
@@ -217,7 +218,7 @@ class MyBackbone(nn.Module):
 
         sss = torch.cat([x10, x11, x12], 1).squeeze()
 
-        sss = self.fc(sss)
+        # sss = self.fc(sss)
         return sss
 
 
@@ -265,4 +266,4 @@ for name, parameter in temp_model.named_parameters():
     # table.add_row([name, params])
     total_params+=params
 
-# print(total_params)
+print(total_params)
