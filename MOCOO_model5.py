@@ -15,9 +15,9 @@ from configs import model_config
 import copy
 from MY_Backbone import MyBackbone
 
-class MOCOOOOOOO(nn.Module):
+class MOCO5(nn.Module):
     def __init__(self, K=4000, m=0.99, T=0.1):
-        super(MOCOOOOOOO, self).__init__()
+        super(MOCO5, self).__init__()
 
         self.K = K
         self.m = m

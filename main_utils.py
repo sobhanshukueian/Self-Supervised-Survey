@@ -19,6 +19,7 @@ from MOCOO_model import ModelMoCo
 from MOCOO_model2 import MOCOOOOOOO
 from MOCOO_model3 import MOCO3
 from MOCOO_model4 import MOCO4
+from MOCOO_model5 import MOCO5
 from MOCOO_model6 import MOCO6
 
 
