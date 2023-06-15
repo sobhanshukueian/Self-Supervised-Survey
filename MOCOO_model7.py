@@ -88,7 +88,7 @@ class MOCO7(nn.Module):
         # compute query features
         # print(self.encoder_q(im_q).size())
         q = self.encoder_q(im_q)
-        q = nn.functional.normalize(q_predicted, dim=1)  # already normalized
+        q = nn.functional.normalize(q, dim=1)  # already normalized
 
         q_mean, q_var = self.encoder_q_gaussian(q)
         iso_kl_loss = self.iso_kl(q_mean, q_var)
