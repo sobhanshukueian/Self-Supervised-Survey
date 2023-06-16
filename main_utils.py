@@ -83,7 +83,7 @@ def get_model(name, conf, resume, save_dir="./", weights=None, device='cpu', ver
     elif name == "MOCO6":
         model = MOCO6()
     elif name == "MOCO7":
-        model == MOCO7()
+        model = MOCO7()
     elif name == "supervised":
         model = torchvision.models.resnet50(pretrained=True, num_classes=model_config["EMBEDDING_SIZE"])
     elif name == "random":

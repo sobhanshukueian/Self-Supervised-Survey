@@ -1,4 +1,4 @@
-# MOCO VAR with projection layer
+# MOCO VAR without projection layer
 
 import torch.nn as nn
 import torch

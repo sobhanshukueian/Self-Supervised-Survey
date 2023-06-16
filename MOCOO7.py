@@ -103,7 +103,7 @@ class Trainer:
 
 
         # get model 
-        self.model, self.conf, self.ckpt = get_model("MOCO6", self.conf, self.resume, self.resume_dir, self.weights, self.verbose)
+        self.model, self.conf, self.ckpt = get_model("MOCO7", self.conf, self.resume, self.resume_dir, self.weights, self.verbose)
         self.model = self.model.to(device)
 
         # if self.verbose > 2:
