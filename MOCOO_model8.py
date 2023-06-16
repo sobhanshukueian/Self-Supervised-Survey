@@ -122,7 +122,7 @@ class MOCO8(nn.Module):
 
         l_pos_gauss = torch.einsum('nc,nc->n', [q_mean, k_mean]).unsqueeze(-1)
         l_neg_gauss = torch.einsum('nc,ck->nk', [q_mean, self.mean_queue.clone().detach()])
-        logits_gauss = torch.cat([l_pos, l_neg], dim=1)
+        logits_gauss = torch.cat([l_pos_gauss, l_neg_gauss], dim=1)
         logits_gauss /= self.T
         labels_gauss = torch.zeros(logits_gauss.shape[0], dtype=torch.long).cuda()
         loss_gauss = nn.CrossEntropyLoss().cuda()(logits_gauss, labels_gauss)
