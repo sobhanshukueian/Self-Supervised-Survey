@@ -33,7 +33,7 @@ class MOCO8(nn.Module):
         for param_q, param_k in zip(self.encoder_q.parameters(), self.encoder_k.parameters()):
             param_k.data.copy_(param_q.data)  # initialize
             param_k.requires_grad = False  # not update by gradient
-
+        
         for param_q, param_k in zip(self.encoder_q_gaussian.parameters(), self.encoder_k_gaussian.parameters()):
             param_k.data.copy_(param_q.data)  # initialize
             param_k.requires_grad = False  # not update by gradient
@@ -41,9 +41,6 @@ class MOCO8(nn.Module):
         # create the queue
         self.register_buffer("queue", torch.randn(model_config["PROJECTION_SIZE"], K))
         self.queue = nn.functional.normalize(self.queue, dim=0)
-
-        self.register_buffer("mean_queue", torch.randn(model_config["PROJECTION_SIZE"], K))
-        self.mean_queue = nn.functional.normalize(self.mean_queue, dim=0)
 
         self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
 
@@ -58,9 +55,8 @@ class MOCO8(nn.Module):
         for param_q, param_k in zip(self.encoder_q_gaussian.parameters(), self.encoder_k_gaussian.parameters()):
             param_k.data = param_k.data * self.m + param_q.data * (1. - self.m)
 
-
     @torch.no_grad()
-    def _dequeue_and_enqueue(self, keys, means):
+    def _dequeue_and_enqueue(self, keys):
         batch_size = keys.shape[0]
 
         ptr = int(self.queue_ptr)
@@ -68,8 +64,6 @@ class MOCO8(nn.Module):
 
         # replace the keys at ptr (dequeue and enqueue)
         self.queue[:, ptr:ptr + batch_size] = keys.t()  # transpose
-        self.mean_queue[:, ptr:ptr + batch_size] = means.t() # transpose
-
         ptr = (ptr + batch_size) % self.K  # move pointer
 
         self.queue_ptr[0] = ptr
@@ -120,20 +114,20 @@ class MOCO8(nn.Module):
             k_mean, k_var = self.encoder_k_gaussian(k)
 
 
-        l_pos_gauss = torch.einsum('nc,nc->n', [q_mean, k_mean]).unsqueeze(-1)
-        l_neg_gauss = torch.einsum('nc,ck->nk', [q_mean, self.mean_queue.clone().detach()])
-        logits_gauss = torch.cat([l_pos_gauss, l_neg_gauss], dim=1)
-        logits_gauss /= self.T
-        labels_gauss = torch.zeros(logits_gauss.shape[0], dtype=torch.long).cuda()
-        loss_gauss = nn.CrossEntropyLoss().cuda()(logits_gauss, labels_gauss)
+        mean = torch.cat([q_mean, k_mean], dim=0)
+        cos_sim = F.cosine_similarity(mean[:,None,:], mean[None,:,:], dim=-1)
+        self_mask = torch.eye(cos_sim.shape[0], dtype=torch.bool, device=cos_sim.device)
+        cos_sim.masked_fill_(self_mask, -9e15)
+        pos_mask = self_mask.roll(shifts=cos_sim.shape[0]//2, dims=0)
+        cos_sim = cos_sim #/ self.hparams.temperature
+        nll = -cos_sim[pos_mask] + torch.logsumexp(cos_sim, dim=-1)
+        loss_gaussian = nll.mean()
+
 
         # compute logits
         # Einstein sum is more intuitive
-        # positive logits: Nx1
-        # print(q_projected.size(), k_projected.size())
+        # positive logits: Nx1]
         l_pos = torch.einsum('nc,nc->n', [q, k]).unsqueeze(-1)
-
-        # print(q_projected.size(), self.queue.clone().size())
         # negative logits: NxK
         l_neg = torch.einsum('nc,ck->nk', [q, self.queue.clone().detach()])
 
@@ -148,7 +142,7 @@ class MOCO8(nn.Module):
         
         loss = nn.CrossEntropyLoss().cuda()(logits, labels)
 
-        return loss, q, k, iso_kl_loss, loss_gauss, k_mean
+        return loss, q, k, iso_kl_loss, loss_gaussian
 
     def forward(self, im1, im2):
         """
@@ -164,13 +158,10 @@ class MOCO8(nn.Module):
             self._momentum_update_key_encoder()
 
         # compute loss
-        loss_12, q1, k2, iso_kl_loss1, loss_gauss1, k1_mean = self.disentangled_contrastive_loss(im1, im2)
-        loss_21, q2, k1, iso_kl_loss2, loss_gauss2, k2_mean = self.disentangled_contrastive_loss(im2, im1)
+        loss_12, q1, k2, iso_kl_loss1, loss_gaussian1 = self.disentangled_contrastive_loss(im1, im2)
+        loss_21, q2, k1, iso_kl_loss2, loss_gaussian2 = self.disentangled_contrastive_loss(im2, im1)
 
-        loss_gauss_total = loss_gauss1 + loss_gauss2
-        k_mean = torch.cat([k1_mean, k2_mean], dim=0)
-
-        loss_contrastive_total = loss_12 + loss_21
+        loss_gaussian_total = loss_gaussian1+loss_gaussian2
 
         iso_kl_loss1 *= 0.001
         iso_kl_loss2 *= 0.001
@@ -179,9 +170,9 @@ class MOCO8(nn.Module):
         loss = loss_12 + loss_21 + iso_kl_total
         k = torch.cat([k1, k2], dim=0)
 
-        self._dequeue_and_enqueue(k, k_mean)
+        self._dequeue_and_enqueue(k)
 
-        return (q1, q2), loss, [loss_contrastive_total, loss_gauss_total, iso_kl_total]
+        return (q1, q2), loss, [loss_12, loss_gaussian_total, iso_kl_total]
 
 # create model
 # model = ModelMoCo().cuda()

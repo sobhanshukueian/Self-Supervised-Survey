@@ -259,8 +259,8 @@ class Trainer:
             print(f'\nTraining completed in {time.ctime(finish_time)} \nIts Done in: {(time.time() - self.start_time) / 3600:.3f} hours.') 
     # -------------------------------------------------------Training Callback after each epoch--------------------------
     def plot_loss(self, train_mean_size=1, val_mean_size=1):
-        FIRST_ = "Contrastive Loss1"
-        SECOND_ = "MEAN LOSS"
+        FIRST_ = "Contrastive Loss"
+        SECOND_ = "LOSS GAUSSIAN"
         THIRD_ = "ISOKLD LOSS"
 
         COLS=5
