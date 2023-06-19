@@ -10,7 +10,7 @@ import torchvision
 import torch.nn as nn
 
 from utils import LARS
-from Barlow_model import BarlowTwins
+from Barlow_model import Barlow_model
 from BYOL_model import BYOLNetwork
 # from BYOL_PA_model import BYOLPANetwork 
 from MOCO_model2 import MOCO
@@ -63,8 +63,8 @@ def get_optimizer(logger, model_parameters, conf, resume, ckpt, optimizer, lr0=0
 
 # Get Model 
 def get_model(name, conf, resume, save_dir="./", weights=None, device='cpu', verbose=1):
-    if name == "barlow":
-        model = BarlowTwins()
+    if name == "Barlow":
+        model = Barlow_model()
     elif name == "byol":
         model = BYOLNetwork()
     # elif name == "byol-pa":
