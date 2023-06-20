@@ -53,7 +53,7 @@ test_data = CIFAR10Pair(train=False, transform=test_transform)
 test_dataloader = DataLoader(test_data, batch_size=model_config["batch_size"], shuffle=False, num_workers=0, pin_memory=True)
 
 
-vis_dataloader = DataLoader(test_data, shuffle=True, num_workers=0, batch_size=model_config["show_batch_size"])
+vis_dataloader = DataLoader(train_data, shuffle=True, num_workers=0, batch_size=model_config["show_batch_size"])
 
 
 # train_features = next(iter(train_dataloader))
