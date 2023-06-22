@@ -194,7 +194,9 @@ class Trainer:
                         if self.epoch != 0: 
                             self.train_losses.append(train_loss)
                             self.train_losses_s.append(train_losses)
-                        
+                    
+                    print(f"Loss: {train_loss}\nLoss Contrast: {train_losses[0]}\nLoss iso: {train_losses[2]}\nLoss Gaussian: {train_losses[1]}")
+
                     print('%20s' * 3  % ("Train", f'{self.epoch}/{self.epochs}', train_loss.item()))     
                     self.logger.warning('%20s' * 3  % ("Train", f'{self.epoch}/{self.epochs}', train_loss.item()))                 
 

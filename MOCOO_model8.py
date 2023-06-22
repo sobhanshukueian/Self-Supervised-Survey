@@ -167,12 +167,14 @@ class MOCO8(nn.Module):
         iso_kl_loss2 *= 0.001
         iso_kl_total = iso_kl_loss1 + iso_kl_loss2
 
-        loss = loss_12 + loss_21 + iso_kl_total + loss_gaussian_total
+        loss_total = loss_12 + loss_21
+
+        loss = loss_total + iso_kl_total + loss_gaussian_total
         k = torch.cat([k1, k2], dim=0)
 
         self._dequeue_and_enqueue(k)
 
-        return (q1, q2), loss, [loss_12, loss_gaussian_total, iso_kl_total]
+        return (q1, q2), loss, [loss_total, loss_gaussian_total, iso_kl_total]
 
 # create model
 # model = ModelMoCo().cuda()
