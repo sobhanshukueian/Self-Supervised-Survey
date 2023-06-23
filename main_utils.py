@@ -23,6 +23,7 @@ from MOCOO_model5 import MOCO5
 from MOCOO_model6 import MOCO6
 from MOCOO_model7 import MOCO7
 from MOCOO_model8 import MOCO8
+from MOCOO_model9 import MOCO9
  
 
 
@@ -87,6 +88,8 @@ def get_model(name, conf, resume, save_dir="./", weights=None, device='cpu', ver
         model = MOCO7()
     elif name == "MOCO8":
         model = MOCO8()
+    elif name == "MOCO9":
+        name == MOCO9()
     elif name == "supervised":
         model = torchvision.models.resnet50(pretrained=True, num_classes=model_config["EMBEDDING_SIZE"])
     elif name == "random":

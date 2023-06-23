@@ -30,8 +30,8 @@ head=dict(
     args=[[3, 2, 1], [3, 2, 1]]
 )
 
-depth_multiple=0.67
-width_multiple=0.75
+depth_multiple=1
+width_multiple=1
 
 channel_list_backbone = backbone['out_channels']
 channel_list_neck = neck['out_channels']
@@ -105,7 +105,7 @@ class Backbone(nn.Module):
 
 
 class Neck(nn.Module):
-    def __init__(self, in_ch=768, ch_list=channels_neck, num_repeat=repeat_neck, args=neck_args):
+    def __init__(self, in_ch=1024, ch_list=channels_neck, num_repeat=repeat_neck, args=neck_args):
         super().__init__()
         assert ch_list is not None
         assert num_repeat is not None
@@ -143,7 +143,7 @@ class Neck(nn.Module):
 
 
 class Head(nn.Module):
-    def __init__(self, in_ch=192, ch_list=channels_head, num_repeat=repeat_head, args=head_args):
+    def __init__(self, in_ch=256, ch_list=channels_head, num_repeat=repeat_head, args=head_args):
         super().__init__()
         assert ch_list is not None
         assert num_repeat is not None
@@ -184,9 +184,9 @@ class MyBackbone(nn.Module):
         
         # embedding_size = model_config["EMBEDDING_SIZE"]
 
-        self.ss1 = Conv2D(in_ch=384, out_ch=64, kernel=2, stride=1, padding=0)
-        self.ss0 = Conv2D(in_ch=192, out_ch=64, kernel=4, stride=1, padding=0)
-        self.ss2 = Conv2D(in_ch=384, out_ch=128, kernel=1, stride=1, padding=0)
+        self.ss1 = Conv2D(in_ch=512, out_ch=64, kernel=2, stride=1, padding=0)
+        self.ss0 = Conv2D(in_ch=256, out_ch=64, kernel=4, stride=1, padding=0)
+        self.ss2 = Conv2D(in_ch=512, out_ch=128, kernel=1, stride=1, padding=0)
 
         # self.fc = self.get_mlp_block(in_ch=1024)
 
@@ -257,7 +257,7 @@ class GaussianProjection(nn.Module):
 # temp1 = torch.rand((10, 3, 32, 32))
 # temp_model = MyBackbone()
 # ress = temp_model(temp1)
-# print(ress.size())
+# # print(ress.size())
 # total_params = 0
 
 # for name, parameter in temp_model.named_parameters():
