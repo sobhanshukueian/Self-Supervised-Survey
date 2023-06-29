@@ -24,7 +24,7 @@ from torch import optim
 import torch.nn.functional as F
 from torch.cuda import amp
 
-from cifar_dataset import train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader
+from stl_dataset import train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader
 from vis import show_batch
 from configs import model_config
 from utils import LARS, off_diagonal, get_color, get_colors, count_parameters, save, adjust_learning_rate, get_params_groups

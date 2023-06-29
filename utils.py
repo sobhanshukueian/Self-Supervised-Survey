@@ -11,6 +11,9 @@ from torch.optim.lr_scheduler import _LRScheduler
 import math
 import numpy as np
 import logging
+from PIL import Image
+import torchvision.transforms.functional as TF
+import random
 
 from configs import model_config
 import torch.nn as nn
@@ -314,3 +317,66 @@ def set_logging(save_dir, name=None):
     logger.addHandler(handler)
     logger.warning(f"{name} LOGGER")
     return logger
+
+class random_mask(object):
+    def __init__(self, output_size, mask_size, p):
+        assert isinstance(output_size, (int, tuple))
+        if isinstance(output_size, int):
+            self.output_size = (output_size, output_size)
+        else:
+            assert len(output_size) == 2
+            self.output_size = output_size
+        self.mask_size = mask_size
+        self.p = p
+
+    def __call__(self, image):
+        """
+        Apply random small black squares, circles, and rectangles to the input image.
+
+        Args:
+            image (PIL Image or Tensor): Input image.
+            target_size (tuple): Desired size of the image. Default is (256, 256).
+            mask_size (int): Size of the small masks. Default is 10.
+            num_masks (int): Number of masks to apply. Default is 10.
+
+        Returns:
+            PIL Image or Tensor: Augmented image with random small masks applied.
+        """
+
+        if random.random() < self.p:
+            return image
+
+        num_masks = int(abs(random.gauss(50, 50)))
+
+        # Convert the image to RGB if it has an alpha channel
+        if image.mode == 'RGBA':
+            image = image.convert('RGB')
+
+        # Convert the image to a Tensor
+        if not isinstance(image, torch.Tensor):
+            image = TF.to_tensor(image)
+
+        # Generate random mask positions
+        image_height, image_width = image.size(1), image.size(2)
+        mask_positions = np.random.randint(low=0, high=min(image_height, image_width) - self.mask_size, size=(num_masks, 2))
+
+        # Apply the masks to the image
+        augmented_image = image.clone()
+        for position in mask_positions:
+            x1, y1 = position
+
+            # Generate random mask shape
+            mask_shape = np.random.choice(['square', 'rectangle'])
+
+            if mask_shape == 'square':
+                x2, y2 = x1 + self.mask_size, y1 + self.mask_size
+                augmented_image[:, y1:y2, x1:x2] = 0
+            elif mask_shape == 'rectangle':
+                x2, y2 = x1 + self.mask_size * 2, y1 + self.mask_size
+                augmented_image[:, y1:y2, x1:x2] = 0
+
+        # Convert the augmented image back to a PIL Image if necessary
+        if not isinstance(image, torch.Tensor):
+            augmented_image = TF.to_pil_image(augmented_image)
+
+        return augmented_image
