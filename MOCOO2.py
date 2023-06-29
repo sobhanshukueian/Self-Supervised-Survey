@@ -24,7 +24,8 @@ from torch import optim
 import torch.nn.functional as F
 from torch.cuda import amp
 
-from stl_dataset import train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader
+from stl_dataset import get_stl_data
+from cifar_dataset import get_cifar_data
 from vis import show_batch
 from configs import model_config
 from utils import LARS, off_diagonal, get_color, get_colors, count_parameters, save, adjust_learning_rate, get_params_groups
@@ -41,6 +42,11 @@ def reproducibility(SEED):
     if torch.cuda.is_available():
         torch.cuda.manual_seed(SEED)
 reproducibility(666)
+
+if model_config["dataset"] == "STL10":
+    train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader = get_stl_data()
+else:
+    train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader = get_cifar_data()
 
 
 BATCH_SIZE = model_config['batch_size']

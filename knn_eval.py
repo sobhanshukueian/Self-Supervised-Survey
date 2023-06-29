@@ -1,6 +1,7 @@
 from tqdm import tqdm
 import torch.nn.functional as F 
 import torch
+from configs import model_config
 
 # code copied from https://colab.research.google.com/github/facebookresearch/moco/blob/colab-notebook/colab/moco_cifar10_demo.ipynb#scrollTo=RI1Y8bSImD7N
 # test using a knn monitor
@@ -18,7 +19,11 @@ def knn_monitor(logger, model, train_val_loader, test_loader, epoch, k=200, t=0.
         # [D, N]
         feature_bank = torch.cat(feature_bank, dim=0).t().contiguous()
         # [N]
-        feature_labels = torch.tensor(train_val_loader.dataset.targets, device=feature_bank.device)
+        if model_config["dataset"] == "STL10":
+            feature_labels = torch.tensor(train_val_loader.dataset.labels, device=feature_bank.device)
+        else:
+            feature_labels = torch.tensor(train_val_loader.dataset.targets, device=feature_bank.device)
+
         # loop test data to predict the label by weighted knn search
         test_bar = tqdm(test_loader, desc='kNN', disable=hide_progress)
         for data, _, target in test_bar:
