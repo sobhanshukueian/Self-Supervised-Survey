@@ -20,7 +20,7 @@ def knn_monitor(logger, model, train_val_loader, test_loader, epoch, k=200, t=0.
         feature_bank = torch.cat(feature_bank, dim=0).t().contiguous()
         # [N]
         if model_config["dataset"] == "STL10":
-            feature_labels = torch.tensor(train_val_loader.dataset.labels, device=feature_bank.device)
+            feature_labels = torch.tensor(train_val_loader.dataset.labels, device=feature_bank.device,  dtype=torch.int64)
         else:
             feature_labels = torch.tensor(train_val_loader.dataset.targets, device=feature_bank.device)
 
