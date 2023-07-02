@@ -47,7 +47,7 @@ test_transform = transforms.Compose([
 
 def get_stl_data():
     train_data = STL10Pair(train=True, transform=train_transform)
-    train_dataloader = DataLoader(train_data, batch_size=model_config["batch_size"], shuffle=False, num_workers=0, pin_memory=True)
+    train_dataloader = DataLoader(train_data, batch_size=model_config["batch_size"], shuffle=True, num_workers=0, pin_memory=True, drop_last=True)
 
     train_val_data= STL10(root=root_path, split="train", transform=test_transform, download=True)
     train_val_dataloader  = DataLoader(train_val_data, batch_size=model_config["batch_size"], shuffle=False, num_workers=0, pin_memory=True)

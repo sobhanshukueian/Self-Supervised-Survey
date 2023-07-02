@@ -4,7 +4,9 @@ import matplotlib
 import matplotlib.pyplot as plt
 import torchvision.utils as vutils
 import os
-
+from utils import get_colors
+import numpy as np
+import os.path as osp
 
 # Showing images
 def show_batch(dataloader, cols = model_config['show_batch_size'], image_size=32):

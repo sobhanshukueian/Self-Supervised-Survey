@@ -163,31 +163,31 @@ class Trainer:
                     self.conf["Trained_epoch"] = self.epoch
                     # ############################################################Train Loop
                     # Training loop
-                    # if self.epoch != 0:
-                    adjust_learning_rate(self.optimizer, self.epoch, model_config["LEARNING_RATE"])
+                    if self.epoch != 0:
+                        adjust_learning_rate(self.optimizer, self.epoch, model_config["LEARNING_RATE"])
 
-                    pbar = enumerate(self.train_loader)
-                    pbar = tqdm(pbar, desc=('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss'), total=self.max_stepnum)                        
-                    self.logger.warning(('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss'))
-                    for step, batch_data in pbar:
-                        train_loss, train_losses = self.train_step(batch_data)
-                        if self.epoch != 0: 
-                            self.train_losses.append(train_loss)
-                            self.train_losses_s.append(train_losses)
-                        
-                    print('%20s' * 3  % ("Train", f'{self.epoch}/{self.epochs}', train_loss.item()))     
-                    self.logger.warning('%20s' * 3  % ("Train", f'{self.epoch}/{self.epochs}', train_loss.item()))                 
+                        pbar = enumerate(self.train_loader)
+                        pbar = tqdm(pbar, desc=('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss'), total=self.max_stepnum)                        
+                        self.logger.warning(('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss'))
+                        for step, batch_data in pbar:
+                            train_loss, train_losses = self.train_step(batch_data)
+                            if self.epoch != 0: 
+                                self.train_losses.append(train_loss)
+                                self.train_losses_s.append(train_losses)
+                            
+                        print('%20s' * 3  % ("Train", f'{self.epoch}/{self.epochs}', train_loss.item()))     
+                        self.logger.warning('%20s' * 3  % ("Train", f'{self.epoch}/{self.epochs}', train_loss.item()))                 
 
-                    del pbar
-            
+                        del pbar
+                
                     # ############################################################Validation Loop
                     validation_model = deepcopy(self.model.encoder_q)
-                    if validation_model.fc : 
-                        validation_model.fc = nn.Identity()
+                    # if validation_model.fc : 
+                    #     validation_model.fc = nn.Identity()
                     knn_acc = knn_monitor(self.logger, validation_model, self.train_val_loader, self.valid_loader, self.epoch, k=200, hide_progress=False)
-                    results['test_acc@1'].append(knn_acc)
+                    results['KNN_acc@1'].append(knn_acc)
 
-                    data_frame = pd.DataFrame(data=results, index=range(epoch_start, epoch + 1))
+                    data_frame = pd.DataFrame(data=results, index=range(self.start_epoch, self.epoch + 1))
                     data_frame.to_csv(self.save_dir + '/knn.csv', index_label='epoch')
 
                     if self.epoch % model_config['EVALUATION_FREQ'] == 0 : 
