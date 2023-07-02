@@ -71,8 +71,8 @@ class ModelBase(nn.Module):
         return x
 
 class MOCO_MODEL(nn.Module):
-    def __init__(self, dim=model_config{"EMBEDDING_SIZE"}, K=4096, m=0.99, T=0.1, arch='resnet18', bn_splits=8, symmetric=True):
-        super(ModelMoCo, self).__init__()
+    def __init__(self, dim=model_config["EMBEDDING_SIZE"], K=4096, m=0.99, T=0.1, arch='resnet18', bn_splits=8, symmetric=True):
+        super(MOCO_MODEL, self).__init__()
 
         self.K = K
         self.m = m
@@ -83,14 +83,7 @@ class MOCO_MODEL(nn.Module):
         self.encoder_q = ModelBase(feature_dim=dim, arch=arch, bn_splits=bn_splits)
         self.encoder_k = ModelBase(feature_dim=dim, arch=arch, bn_splits=bn_splits)
 
-        self.encoder_q_gaussian = GaussianProjection()
-        self.encoder_k_gaussian = GaussianProjection()
-
         for param_q, param_k in zip(self.encoder_q.parameters(), self.encoder_k.parameters()):
-            param_k.data.copy_(param_q.data)  # initialize
-            param_k.requires_grad = False  # not update by gradient
-
-        for param_q, param_k in zip(self.encoder_q_gaussian.parameters(), self.encoder_k_gaussian.parameters()):
             param_k.data.copy_(param_q.data)  # initialize
             param_k.requires_grad = False  # not update by gradient
 
@@ -108,8 +101,6 @@ class MOCO_MODEL(nn.Module):
         for param_q, param_k in zip(self.encoder_q.parameters(), self.encoder_k.parameters()):
             param_k.data = param_k.data * self.m + param_q.data * (1. - self.m)
 
-        for param_q, param_k in zip(self.encoder_q_gaussian.parameters(), self.encoder_k_gaussian.parameters()):
-            param_k.data = param_k.data * self.m + param_q.data * (1. - self.m)
 
 
     @torch.no_grad()
@@ -145,19 +136,11 @@ class MOCO_MODEL(nn.Module):
         """
         return x[idx_unshuffle]
 
-    def iso_kl(self, mean, log_var):
-        return - 0.5 * torch.sum(1+ log_var - mean.pow(2) - log_var.exp())
-
-    def disentangled_contrastive_loss(self, im_q, im_k):
+    def contrastive_loss(self, im_q, im_k):
         # compute query features
         # print(self.encoder_q(im_q).size())
         q = self.encoder_q(im_q)
         q = nn.functional.normalize(q, dim=1)  # already normalized
-
-        q_mean, q_var = self.encoder_q_gaussian(q)
-        iso_kl_loss = self.iso_kl(q_mean, q_var)
-
-
         # compute key features
         with torch.no_grad():  # no gradient to keys
             # shuffle for making use of BN
@@ -168,18 +151,6 @@ class MOCO_MODEL(nn.Module):
 
             # undo shuffle
             k = self._batch_unshuffle_single_gpu(k, idx_unshuffle)
-            k_mean, k_var = self.encoder_k_gaussian(k)
-
-
-        mean = torch.cat([q_mean, k_mean], dim=0)
-        cos_sim = F.cosine_similarity(mean[:,None,:], mean[None,:,:], dim=-1)
-        self_mask = torch.eye(cos_sim.shape[0], dtype=torch.bool, device=cos_sim.device)
-        cos_sim.masked_fill_(self_mask, -9e15)
-        pos_mask = self_mask.roll(shifts=cos_sim.shape[0]//2, dims=0)
-        cos_sim = cos_sim #/ self.hparams.temperature
-        nll = -cos_sim[pos_mask] + torch.logsumexp(cos_sim, dim=-1)
-        loss_gaussian = nll.mean()
-
 
         # compute logits
         # Einstein sum is more intuitive
@@ -199,7 +170,7 @@ class MOCO_MODEL(nn.Module):
 
         loss = nn.CrossEntropyLoss().cuda()(logits, labels)
 
-        return loss, q, k, iso_kl_loss, loss_gaussian
+        return loss, q, k
 
     def forward(self, im1, im2):
         """
@@ -215,18 +186,12 @@ class MOCO_MODEL(nn.Module):
             self._momentum_update_key_encoder()
 
         # compute loss
-        loss_12, q1, k2, iso_kl_loss1, loss_gaussian1 = self.disentangled_contrastive_loss(im1, im2)
-        loss_21, q2, k1, iso_kl_loss2, loss_gaussian2 = self.disentangled_contrastive_loss(im2, im1)
-
-        loss_gaussian_total = loss_gaussian1+loss_gaussian2
-
-        iso_kl_loss1 *= 0.001
-        iso_kl_loss2 *= 0.001
-        iso_kl_total = iso_kl_loss1 + iso_kl_loss2
+        loss_12, q1, k2 = self.contrastive_loss(im1, im2)
+        loss_21, q2, k1 = self.contrastive_loss(im2, im1)
 
         loss_total = loss_12 + loss_21
 
-        loss = loss_total + iso_kl_total + loss_gaussian_total
+        loss = loss_total 
         k = torch.cat([k1, k2], dim=0)
         self._dequeue_and_enqueue(k)
 
