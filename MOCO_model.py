@@ -71,7 +71,7 @@ class ModelBase(nn.Module):
         return x
 
 class MOCO_MODEL(nn.Module):
-    def __init__(self, dim=128, K=4096, m=0.99, T=0.1, arch='resnet18', bn_splits=8, symmetric=True):
+    def __init__(self, dim=128, K=4096, m=0.99, T=0.1, arch='resnet18', bn_splits=8, symmetric=False):
         super(MOCO_MODEL, self).__init__()
 
         self.K = K
@@ -196,7 +196,7 @@ class MOCO_MODEL(nn.Module):
         if train:
             self._dequeue_and_enqueue(k)
 
-        return (q1, q2), loss, [loss_12, loss_21, loss_12]
+        return (q, q), loss, [loss, loss, loss]
 
 
 # create model

@@ -140,6 +140,7 @@ class Trainer:
             if self.epoch != 0: 
                 self.train_losses.append(train_loss)
                 self.train_losses_s.append(train_losses)
+            pbar.set_postfix({'loss':train_loss})
             
         print('%20s' * 4  % ("Train", f'{self.epoch}/{self.epochs}', train_loss, lr))     
         self.logger.warning('%20s' * 4  % ("Train", f'{self.epoch}/{self.epochs}', train_loss, lr))
@@ -214,12 +215,12 @@ class Trainer:
                     self.conf["Trained_epoch"] = self.epoch
 
                     # ############################################################Train Loop
-                    if self.epoch != 0:
-                        self.train()
-                    else : 
-                        initial_params = [param.clone() for param in self.model.parameters()]
+                    # if self.epoch != 0:
+                    self.train()
+                    # else : 
+                    #     initial_params = [param.clone() for param in self.model.parameters()]
 
-                    self.knn_eval()
+                    # self.knn_eval()
 
                     # ###########################################################Validation Loop
 
@@ -308,5 +309,3 @@ class Trainer:
             plt.savefig("{}/epoch-{}-loss-plot.png".format(save_plot_dir, self.epoch)) 
         if self.visualize_plots:
             plt.show()
-
-Trainer().run()
