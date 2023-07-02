@@ -215,19 +215,19 @@ class Trainer:
                     self.conf["Trained_epoch"] = self.epoch
 
                     # ############################################################Train Loop
-                    # if self.epoch != 0:
-                    self.train()
-                    # else : 
-                    #     initial_params = [param.clone() for param in self.model.parameters()]
+                    if self.epoch != 0:
+                        self.train()
+                    else : 
+                        initial_params = [param.clone() for param in self.model.parameters()]
 
-                    # self.knn_eval()
+                    self.knn_eval()
 
                     # ###########################################################Validation Loop
 
-                    # if self.epoch % model_config['VALIDATION_FREQ'] == 0 : 
-                    #     print("--------------------------")
-                    #     self.validation()
-                    #     print("--------------------------")
+                    if self.epoch % model_config['VALIDATION_FREQ'] == 0 : 
+                        print("--------------------------")
+                        self.validation()
+                        print("--------------------------")
 
                     if self.epoch == 0:
                         self.sanity_check(self.model.parameters(), initial_params)
