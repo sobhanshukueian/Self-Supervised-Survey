@@ -13,6 +13,7 @@ from tqdm import tqdm
 import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
+import csv
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 from utils import CosineAnnealingWarmupRestarts, set_logging
 
@@ -150,12 +151,13 @@ class Trainer:
 
     # Each Validation Step
     def val_step(self, batch_data):
-        self.model.eval()
         image1, image2, targets = self.prepro_data(batch_data, self.device)
         preds, loss, losses = self.model(image1, image2)
         return loss.item(), [pred.cpu().detach().numpy() for pred in preds], targets, [loss.item() for loss in losses]
 
     def validation(self):
+        self.model.eval()
+
         val_labels = []
         val_embeddings = []
 
@@ -183,17 +185,13 @@ class Trainer:
         # PLot Embeddings
         plot_embeddings(self.epoch, np.array(val_embeddings), np.array(val_labels), 0)
 
-        if val_loss < self.best_loss:
-            self.best_loss= val_loss
-
     def knn_eval(self):
         validation_model = deepcopy(self.model.encoder_q)
         # if validation_model.fc : 
         #     validation_model.fc = nn.Identity()
         knn_acc = knn_monitor(self.logger, validation_model, self.train_val_loader, self.valid_loader, self.epoch, k=200, hide_progress=False)
-        results['KNN_acc@1'].append(knn_acc)
-        
-        filename = self..save_dir + "/KNN.csv"
+
+        filename = self.save_dir + "/KNN.csv"
         
         file_exists = os.path.isfile(filename)
 
@@ -218,8 +216,6 @@ class Trainer:
             print('Start Training Process \nTime: {}'.format(time.ctime(self.start_time)))
             self.logger.warning('Start Training Process \nTime: {}'.format(time.ctime(self.start_time)))
 
-            self.best_loss = np.inf
-
             # Epoch Loop
             for self.epoch in range(self.start_epoch, self.epochs+1):
                 try:
@@ -228,14 +224,20 @@ class Trainer:
                     # ############################################################Train Loop
                     if self.epoch != 0:
                         self.train()
-                    
+                    else : 
+                        initial_params = {k: param.clone() for k, param in self.model.named_parameters()}
+
                     self.knn_eval()
 
                     # ###########################################################Validation Loop
+
                     if self.epoch % model_config['VALIDATION_FREQ'] == 0 : 
                         self.validation()
+
+                    if self.epoch == 0:
+                        self.sanity_check(self.model.state_dict(), initial_params)
                         
-                    save(conf=self.conf, save_dir=self.save_dir, model_name=self.model_name, model=self.model, epoch=self.epoch, val_loss=self.val_loss, best_loss=self.best_loss, optimizer=self.optimizer)
+                    save(conf=self.conf, save_dir=self.save_dir, model_name=self.model_name, model=self.model, epoch=self.epoch, optimizer=self.optimizer)
          
                 except Exception as _:
                     print('ERROR in training steps.')
@@ -251,6 +253,19 @@ class Trainer:
 
 
     # -------------------------------------------------------Training Callback after each epoch--------------------------
+
+    def sanity_check(self, state_dict, initial_params):
+        for k in list(state_dict.keys()):
+            # # Only ignore linear layer weights
+            # if 'linear.weight' in k or 'linear.bias' in k:
+            #     continue
+
+            assert ((state_dict[k].cpu() == initial_params[k].cpu()).all()), \
+                '{} is changed in linear classifier training.'.format(k)
+
+        print("=> Sanity check passed.")
+
+
     def plot_loss(self, train_mean_size=1, val_mean_size=1):
         FIRST_ = "Contrastive Loss1"
         SECOND_ = "Contrastive Loss2"
