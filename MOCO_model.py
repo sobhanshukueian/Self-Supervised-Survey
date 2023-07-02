@@ -122,7 +122,7 @@ class MOCO_MODEL(nn.Module):
         Batch shuffle, for making use of BatchNorm.
         """
         # random shuffle index
-        idx_shuffle = torch.randperm(x.shape[0]).cuda()
+        idx_shuffle = torch.randperm(x.shape[0]).to(model_config["device"])
 
         # index for restoring
         idx_unshuffle = torch.argsort(idx_shuffle)
@@ -166,9 +166,9 @@ class MOCO_MODEL(nn.Module):
         logits /= self.T
 
         # labels: positive key indicators
-        labels = torch.zeros(logits.shape[0], dtype=torch.long).cuda()
+        labels = torch.zeros(logits.shape[0], dtype=torch.long).to(model_config["device"])
 
-        loss = nn.CrossEntropyLoss().cuda()(logits, labels)
+        loss = nn.CrossEntropyLoss().to(model_config["device"])(logits, labels)
 
         return loss, q, k
 

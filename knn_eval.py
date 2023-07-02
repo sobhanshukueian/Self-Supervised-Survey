@@ -13,7 +13,7 @@ def knn_monitor(logger, model, train_val_loader, test_loader, epoch, k=200, t=0.
     with torch.no_grad():
         # generate feature bank
         for data, target in tqdm(train_val_loader, desc='Feature extracting', leave=False, disable=hide_progress):
-            feature = model(data.cuda(non_blocking=True))
+            feature = model(data.to(model_config["device"], non_blocking=True))
             feature = F.normalize(feature, dim=1)
             feature_bank.append(feature)
         # [D, N]
@@ -27,7 +27,7 @@ def knn_monitor(logger, model, train_val_loader, test_loader, epoch, k=200, t=0.
         # loop test data to predict the label by weighted knn search
         test_bar = tqdm(test_loader, desc='kNN', disable=hide_progress)
         for data, _, target in test_bar:
-            data, target = data.cuda(non_blocking=True), target.cuda(non_blocking=True)
+            data, target = data.to(model_config["device"], non_blocking=True), target.to(model_config["device"], non_blocking=True)
             feature = model(data)
             feature = F.normalize(feature, dim=1)
             
