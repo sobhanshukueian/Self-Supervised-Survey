@@ -10,20 +10,20 @@ import torchvision
 import torch.nn as nn
 
 from utils import LARS
-from Barlow_model import Barlow_model
-from BYOL_model import BYOLNetwork
+# from Barlow_model import Barlow_model
+# from BYOL_model import BYOLNetwork
 # from BYOL_PA_model import BYOLPANetwork 
-from MOCO_model2 import MOCO
+# from MOCO_model2 import MOCO
 from configs import model_config
-from MOCOO_model import ModelMoCo
-from MOCOO_model2 import MOCOOOOOOO
-from MOCOO_model3 import MOCO3
-from MOCOO_model4 import MOCO4
-from MOCOO_model5 import MOCO5
-from MOCOO_model6 import MOCO6
-from MOCOO_model7 import MOCO7
-from MOCOO_model8 import MOCO8
-from MOCOO_model9 import MOCO9
+from MOCO_model import MOCO_MODEL
+# from MOCOO_model2 import MOCOOOOOOO
+# from MOCOO_model3 import MOCO3
+# from MOCOO_model4 import MOCO4
+# from MOCOO_model5 import MOCO5
+# from MOCOO_model6 import MOCO6
+# from MOCOO_model7 import MOCO7
+# from MOCOO_model8 import MOCO8
+# from MOCOO_model9 import MOCO9
  
 
 
@@ -64,32 +64,34 @@ def get_optimizer(logger, model_parameters, conf, resume, ckpt, optimizer, lr0=0
 
 # Get Model 
 def get_model(name, conf, resume, save_dir="./", weights=None, device='cpu', verbose=1):
-    if name == "Barlow":
-        model = Barlow_model()
-    elif name == "byol":
-        model = BYOLNetwork()
+    if name == "MOCO":
+        model = MOCO_MODEL()
+    
+    # if name == "Barlow":
+    #     model = Barlow_model()
+    # elif name == "byol":
+    #     model = BYOLNetwork()
     # elif name == "byol-pa":
     #     model = BYOLPANetwork()
-    elif name == "MOCO":
-        model = MOCO()
-    elif name == "MOCOO":
-        model = ModelMoCo()
-    elif name == "MOCOO2":
-        model = MOCOOOOOOO()
-    elif name == "MOCO3":
-        model = MOCO3()
-    elif name == "MOCO4":
-        model = MOCO4()
-    elif name == "MOCO5":
-        model = MOCO5()
-    elif name == "MOCO6":
-        model = MOCO6()
-    elif name == "MOCO7":
-        model = MOCO7()
-    elif name == "MOCO8":
-        model = MOCO8()
-    elif name == "MOCO9":
-        model = MOCO9()
+
+    # elif name == "MOCOO":
+    #     model = ModelMoCo()
+    # elif name == "MOCOO2":
+    #     model = MOCOOOOOOO()
+    # elif name == "MOCO3":
+    #     model = MOCO3()
+    # elif name == "MOCO4":
+    #     model = MOCO4()
+    # elif name == "MOCO5":
+    #     model = MOCO5()
+    # elif name == "MOCO6":
+    #     model = MOCO6()
+    # elif name == "MOCO7":
+    #     model = MOCO7()
+    # elif name == "MOCO8":
+    #     model = MOCO8()
+    # elif name == "MOCO9":
+    #     model = MOCO9()
     elif name == "supervised":
         model = torchvision.models.resnet50(pretrained=True, num_classes=model_config["EMBEDDING_SIZE"])
     elif name == "random":
@@ -117,35 +119,5 @@ def get_model(name, conf, resume, save_dir="./", weights=None, device='cpu', ver
         state_dict = {k: v for k, v in state_dict.items() if k in model_state_dict and v.shape == model_state_dict[k].shape}
         model.load_state_dict(state_dict, strict=False)
         del state_dict, model_state_dict
-    # Log Model
-    # if verbose > 0:
-    #     print('Model: {}'.format(model))
-    conf["Model"] = str(model)
+        
     return model, conf, ckpt
-
-def eval_knn(embeddings, labels, knns):
-    X_train = np.array(embeddings)
-    y_train = np.array(labels)
-
-    k = 1
-    knn = KNeighborsClassifier(n_neighbors=k, metric="cosine").fit(X_train, y_train)
-    acc = 100 * np.mean(cross_val_score(knn, X_train, y_train))
-
-    print(f'KNN Accuracy: {acc}')
-    # print(len(knns))
-
-    if len(knns) > 0:
-        indices = range(len(knns))
-        plt.figure(figsize=(10,6))
-        plt.plot(indices, knns, label='train set KNN acc (%)')
-        plt.ylabel('Accuracy in %')
-        plt.xlabel('Epochs')
-        plt.legend()
-        if model_config["SAVE_PLOTS"]:
-            save_plot_dir = osp.join(model_config["SAVE_DIR"], 'plots') 
-            if not osp.exists(save_plot_dir):
-                os.makedirs(save_plot_dir)
-            plt.savefig("{}/knn.png".format(save_plot_dir)) 
-        if model_config["VISUALIZE_PLOTS"]:
-            plt.show()
-    return acc

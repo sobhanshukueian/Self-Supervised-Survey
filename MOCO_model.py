@@ -1,218 +1,177 @@
-# import torch.nn as nn
-# import torch
-# import torchvision.utils
-# import torchvision
-# import torch.nn.functional as F
+# MOCO without projection layer 
 
-# import copy
-# from utils import EMA
-# from configs import model_config
+import torch.nn as nn
+import torch
+import torchvision.utils
+import torchvision
+import torch.nn.functional as F
+from torchvision.models import resnet
+import torchvision.models as torchvision_models
+from functools import partial
+import torch.nn.init as init
 
-# #create the Siamese Neural Network
-# class MOCO_Network(nn.Module):
 
-#     def __init__(self):
-#         super(MOCO_Network, self).__init__()
+from configs import model_config
+import copy
+
+class ModelBase(nn.Module):
+    """
+    Common CIFAR ResNet recipe.
+    Comparing with ImageNet ResNet recipe, it:
+    (i) replaces conv1 with kernel=3, str=1
+    (ii) removes pool1
+    """
+    def __init__(self, feature_dim=model_config["EMBEDDING_SIZE"], arch=None):
+        super(ModelBase, self).__init__()
+
+        # use split batchnorm
+        norm_layer = nn.BatchNorm2d
+        resnet_arch = getattr(resnet, arch)
+        net = resnet_arch(num_classes=feature_dim, norm_layer=norm_layer)
+
+        self.net = []
+        for name, module in net.named_children():
+            if name == 'conv1':
+                module = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+            if isinstance(module, nn.MaxPool2d):
+                continue
+            if isinstance(module, nn.Linear):
+                self.net.append(nn.Flatten(1))
+            self.net.append(module)
+
+        self.net = nn.Sequential(*self.net)
+
+    def forward(self, x):
+        x = self.net(x)
+        # note: not normalized here
+        return x
+
+
+class MOCO_MODEL(nn.Module):
+    def __init__(self, K=4096, m=0.99, T=0.1):
+        super(MOCO_MODEL, self).__init__()
+
+        self.K = K
+        self.m = m
+        self.T = T
+
+        # create the encoders
+        self.encoder_q = ModelBase(feature_dim=model_config["EMBEDDING_SIZE"], arch='resnet18')
+        self.encoder_k =  ModelBase(feature_dim=model_config["EMBEDDING_SIZE"], arch='resnet18')
         
-#         self.online = self.get_representation()
-#         self.online.mean = self.get_linear_block()
-#         self.online.var = self.get_linear_block()
-#         self.online.predict = self.get_linear_block()
 
+        for param_q, param_k in zip(self.encoder_q.parameters(), self.encoder_k.parameters()):
+            param_k.data.copy_(param_q.data)  # initialize
+            param_k.requires_grad = False  # not update by gradient
 
-#         self.target = self.get_target()
-#         # self.target.mean = self.copy_block(self.online.mean)
-#         # self.target.var = self.copy_block(self.online.var)
-#         # self.target.predict = self.copy_block(self.online.predict)
+        # create the queue
+        self.register_buffer("queue", torch.randn(model_config["EMBEDDING_SIZE"], K))
+        self.queue = nn.functional.normalize(self.queue, dim=0)
 
-#         self.ema = EMA(0.99)    
-#         self.f = nn.Flatten()
+        self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
 
-#         self.loss = MyLoss( )
+    @torch.no_grad()
+    def  _momentum_update_key_encoder(self):
+        """
+        Momentum update of the key encoder
+        """
+        for param_q, param_k in zip(self.encoder_q.parameters(), self.encoder_k.parameters()):
+            param_k.data = param_k.data * self.m + param_q.data * (1. - self.m)
 
-#     @torch.no_grad()
-#     def get_target(self):
-#         return copy.deepcopy(self.online)
+    @torch.no_grad()
+    def _dequeue_and_enqueue(self, keys):
+        batch_size = keys.shape[0]
 
-#     def get_linear_block(self):
-#         return nn.Sequential(
-#             nn.Linear(model_config["EMBEDDING_SIZE"], model_config["HIDDEN_SIZE"]),
-#             nn.BatchNorm1d(model_config["HIDDEN_SIZE"]),
-#             nn.ReLU(inplace=True),
-#             nn.Linear(model_config["HIDDEN_SIZE"], model_config["EMBEDDING_SIZE"])  
-#         )
+        ptr = int(self.queue_ptr)
+        assert self.K % batch_size == 0  # for simplicity
+
+        # replace the keys at ptr (dequeue and enqueue)
+        self.queue[:, ptr:ptr + batch_size] = keys.t()  # transpose
+        ptr = (ptr + batch_size) % self.K  # move pointer
+
+        self.queue_ptr[0] = ptr
+
+    @torch.no_grad()
+    def _batch_shuffle_single_gpu(self, x):
+        """
+        Batch shuffle, for making use of BatchNorm.
+        """
+        # random shuffle index
+        idx_shuffle = torch.randperm(x.shape[0]).cuda()
+
+        # index for restoring
+        idx_unshuffle = torch.argsort(idx_shuffle)
+
+        return x[idx_shuffle], idx_unshuffle
+
+    @torch.no_grad()
+    def _batch_unshuffle_single_gpu(self, x, idx_unshuffle):
+        """
+        Undo batch shuffle.
+        """
+        return x[idx_unshuffle]
+
+    def contrastive_loss(self, im_q, im_k):
+        # compute query features
+        q = self.encoder_q(im_q)  # queries: NxC
+        q = nn.functional.normalize(q, dim=1)  # already normalized
+
+        # compute key features
+        with torch.no_grad():  # no gradient to keys
+            # shuffle for making use of BN
+            im_k_, idx_unshuffle = self._batch_shuffle_single_gpu(im_k)
+
+            k = self.encoder_k(im_k_)  # keys: NxC
+            k = nn.functional.normalize(k, dim=1)  # already normalized
+
+            # undo shuffle
+            k = self._batch_unshuffle_single_gpu(k, idx_unshuffle)
+
+        # compute logits
+        # Einstein sum is more intuitive
+        # positive logits: Nx1
+        l_pos = torch.einsum('nc,nc->n', [q, k]).unsqueeze(-1)
+        # negative logits: NxK
+        l_neg = torch.einsum('nc,ck->nk', [q, self.queue.clone().detach()])
+
+        # logits: Nx(1+K)
+        logits = torch.cat([l_pos, l_neg], dim=1)
+
+        # apply temperature
+        logits /= self.T
+
+        # labels: positive key indicators
+        labels = torch.zeros(logits.shape[0], dtype=torch.long).cuda()
         
-#     def get_representation(self):
-#         return torchvision.models.resnet50(num_classes=model_config["EMBEDDING_SIZE"])
+        loss = nn.CrossEntropyLoss().cuda()(logits, labels)
 
-#     @torch.no_grad()
-#     def update_moving_average(self):
-#         assert self.target is not None, 'target encoder has not been created yet'
+        return loss, q, k
 
-#         for online_params, target_params in zip(self.online.parameters(), self.target.parameters()):
-#             old_weight, up_weight = target_params.data, online_params.data
-#             target_params.data = self.ema.update_average(old_weight, up_weight)
+    def forward(self, im1, im2):
+        """
+        Input:
+            im_q: a batch of query images
+            im_k: a batch of key images
+        Output:
+            loss
+        """
 
-#     def reparameterization(self, mean, logvar):
-#         var = torch.exp(0.5*logvar)
-#         epsilon = torch.randn_like(var)      # sampling epsilon        
-#         z = mean + var * epsilon                          # reparameterization trick
-#         return z
+        # update the key encoder
+        with torch.no_grad():  # no gradient to keys
+            self._momentum_update_key_encoder()
 
-#     def forward_once(self, x):
-#         # This function will be called for both images
-#         # Its output is used to determine the similiarity
-#         embedding_o = self.online(x)
-#         mean_o = self.online.mean(embedding_o)
-#         logvar_o = self.online.var(embedding_o)
-#         z_o = self.reparameterization(mean_o, logvar_o)
-#         z_o_p = self.online.predict(z_o)
-#         # z_tar = self.target.predict(z_tar)
+        # compute loss
+        loss_12, q1, k2 = self.contrastive_loss(im1, im2)
+        loss_21, q2, k1 = self.contrastive_loss(im2, im1)
 
-#         with torch.no_grad():
-#             embedding_tar = self.target(x).detach()
-#             mean_tar = self.target.mean(embedding_tar).detach()
-#             logvar_tar = self.target.var(embedding_tar).detach()
-#             z_tar = self.reparameterization(mean_tar, logvar_tar).detach()
+        loss = loss_12 + loss_21
+        k = torch.cat([k1, k2], dim=0)
 
-#         return (embedding_o, mean_o, logvar_o, z_o, z_o_p), (embedding_tar, mean_tar, logvar_tar, z_tar)
+        self._dequeue_and_enqueue(k)
+
+        return (q1, q2), loss, [loss_12, loss_21, loss_12]
+
+# create model
+# model = ModelMoCo().cuda()
     
-#     def forward(self, input1, input2):
-#         if input2 is None :
-#             return self.online(x)
-
-#         o1, t1 = self.forward_once(input1)
-#         o2, t2 = self.forward_once(input2)
-
-#         loss, losses = self.loss(o1, o2, t1, t2)
-
-#         return (o1[0], o1[-1]), loss, losses
-
-# # Define the Contrastive Loss Function
-# class MyLoss(torch.nn.Module):
-#     def __init__(self, margin=2):
-#         super(MyLoss, self).__init__()
-#         self.margin = margin
-
-#     def kl_divergence(self, mu1, log_var1, mu2, log_var2):
-#         max_logvar = 10.0
-#         # log_var1 = torch.clamp(log_var1, max=max_logvar)
-#         # log_var2 = torch.clamp(log_var2, max=max_logvar)
-#         var1 = torch.exp(log_var1)
-#         var2 = torch.exp(log_var2)
-
-#         # term1 = (var1 / var2 - 1).sum(dim=1)
-#         term1 = 0
-#         term2 = ((mu2 - mu1).pow(2)).sum(dim=1)
-#         # term3 = (log_var2 - log_var1).sum(dim=1)
-#         term3 = 0
-
-#         # if torch.isinf(term2.mean()) or torch.isinf(term3.mean()):
-#         #     # print("\nterm1: ", term1.mean())
-#         #     print(f"\nterm2: {term2.mean()}")
-#         #     print(f"\nterm3: {term3.mean()}")
-
-#         #     # mask = torch.isinf(term1)
-#         #     inf_indices = torch.nonzero(mask)
-#         #     # print("\nterm1 indices: ", term1[inf_indices])
-#         #     print(f"\nvar1 indices: {var1[inf_indices]} \nvar2 indices: {var2[inf_indices]}")
-#         #     print(f"\nlog_var1 indices: {log_var1[inf_indices]}, log_var2 indices: {log_var2[inf_indices]}")
-
-
-#         kl_div = 0.5 * (term1 + term2 + term3)
-#         return kl_div.mean()
-        
-#     def iso_KL_divergence(self, mean, log_var):
-#         # max_logvar = 10.0
-#         # log_var = torch.clamp(log_var, max=max_logvar)
-#         term1 = (-1 - log_var)
-#         term2 =  mean.pow(2)
-#         term3 = log_var.exp()
-
-#         if torch.isinf(term1.mean()) or torch.isinf(term2.mean()) or torch.isinf(term3.mean()):
-#         # if term1.mean() > 10 or term2.mean() > 10 or term3.mean() > 10:
-#             print("\nterm1: ", term1.mean())
-#             print(f"\nterm2: {term2.mean()}")
-#             print(f"\nterm3: {term3.mean()}")
-
-#             mask = torch.isinf(term3)
-#             inf_indices = torch.nonzero(mask)
-#             print("\nterm1 indices: ", term3[inf_indices])
-#             print(f"\nlog_var1 indices: {log_var[inf_indices]}")
-
-#         return 0.5 * torch.sum(term1 + term2 + term3)
-
-#     def cosine_sim(self, tensor1, tensor2):
-#         return torch.abs(F.cosine_similarity(tensor1, tensor2, dim=1)).mean()
-
-#     def byol_loss(self, x, y):
-#         # L2 normalization
-#         x = F.normalize(x, dim=-1, p=2)
-#         y = F.normalize(y, dim=-1, p=2)
-#         loss = 2 - 2 * (x * y).sum(dim=-1)
-#         return loss.mean()
-        
-
-#     def forward(self, o1, o2, t1, t2):
-
-#         KLD = 0
-#         kl_div = 0
-#         euclidean_distance = 0
-#         cosine_similarity = 0
-
-#         ##########################################ISOtrpoic gaussian
-#         # KLD += self.iso_KL_divergence(o1[1], o1[2])
-#         # KLD += self.iso_KL_divergence(o2[1], o2[2])
-#         # KLD += self.iso_KL_divergence(t1[1], t1[2])
-#         # KLD += self.iso_KL_divergence(t2[1], t2[2])
-#         ##########################################ISOtrpoic gaussian
-
-
-#         ########################################################KL Divergence 
-#         # kl_div += self.kl_divergence(o1[1], o1[2], t2[1], t2[2])
-#         # kl_div += self.kl_divergence(o2[1], o2[2], t1[1], t1[2])
-#         # kl_div += self.kl_divergence(t2[1], t2[2], o1[1], o1[2])
-#         # kl_div += self.kl_divergence(t1[1], t1[2], o2[1], o2[2])
-#         kl_div += F.pairwise_distance(o1[1], t2[1], keepdim = True).squeeze().mean()
-#         kl_div += F.pairwise_distance(o2[1], t1[1], keepdim = True).squeeze().mean()
-#         kl_div += F.pairwise_distance(t1[1], t2[1], keepdim = True).squeeze().mean()
-#         kl_div += F.pairwise_distance(o2[1], o1[1], keepdim = True).squeeze().mean()
-#         ########################################################KL Divergence 
-
-
-#         #######################################################################################Samples Loss
-#         euclidean_distance += F.pairwise_distance(o1[4], t2[3], keepdim = True).squeeze().mean()
-#         euclidean_distance += F.pairwise_distance(o2[4], t1[3], keepdim = True).squeeze().mean()
-        
-#         # euclidean_distance += self.cosine_sim(o1[4], t2[3])
-#         # euclidean_distance += self.cosine_sim(o2[4], t1[3])
-#         # cosine_similarity += self.cosine_sim(o1[4], t2[3])
-#         # cosine_similarity += self.cosine_sim(o2[4], t1[3])
-#         # cosine_similarity += self.cosine_sim(t2[3], t1[3])
-#         # cosine_similarity += self.cosine_sim(o2[3], o1[3])
-
-#         #######################################################################################Samples Loss
-
-#         weight1 = 0.1
-#         weight2 = 0.1
-#         weight3 = 10
-
-#         KLD *= weight1 
-#         kl_div *= weight2
-#         euclidean_distance *= weight3
-
-    
-#         total_loss =  euclidean_distance + kl_div
-#         if torch.isnan(total_loss) or torch.isinf(total_loss):
-#             print("------------------------")
-#             print("KLD: ", KLD)
-#             print("kl_div", kl_div)
-#             print("euclidean_distance", euclidean_distance)
-#             mask = torch.isinf(euclidean_distance)
-#             inf_indices = torch.nonzero(mask)
-#             # print("\nterm1 indices: ", euclidean_distance[inf_indices])
-#             print(f"\no141 indices: {o1[4][inf_indices]}")
-#             print(f"\nt23 indices: {t2[3][inf_indices]}")
-
-
-#         return total_loss, [kl_div, euclidean_distance]
+# print(model.encoder_q)

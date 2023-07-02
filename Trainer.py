@@ -12,6 +12,7 @@ from sklearn.metrics import auc
 from tqdm import tqdm
 import matplotlib
 import matplotlib.pyplot as plt
+import pandas as pd
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 from utils import CosineAnnealingWarmupRestarts, set_logging
 
@@ -29,14 +30,9 @@ from cifar_dataset import get_cifar_data
 from vis import show_batch
 from configs import model_config
 from utils import LARS, off_diagonal, get_color, get_colors, count_parameters, save, adjust_learning_rate, get_params_groups
-from BYOL_model import BYOLNetwork
+# from BYOL_model import BYOLNetwork
 from main_utils import get_optimizer, get_model
 from knn_eval import knn_monitor
-
-if model_config["dataset"] == "STL10":
-    train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader = get_stl_data()
-else:
-    train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader = get_cifar_data()
 
 
 def reproducibility(SEED):
@@ -49,44 +45,35 @@ def reproducibility(SEED):
 reproducibility(666)
 
 
-BATCH_SIZE = model_config['batch_size']
-EPOCHS = model_config['EPOCHS']
-device = model_config['device']
-VERBOSE = model_config['VERBOSE']
-SAVE_PLOTS = model_config['SAVE_PLOTS']
-VISUALIZE_PLOTS = model_config['VISUALIZE_PLOTS']
-SAVE_DIR = model_config['SAVE_DIR']
-MODEL_NAME = model_config['MODEL_NAME']
-WEIGHTS = model_config['WEIGHTS']
-OPTIMIZER = model_config['OPTIMIZER']
-EVALUATION_FREQ = model_config['EVALUATION_FREQ']
-RESUME = model_config['RESUME']
-RESUME_DIR = model_config["RESUME_DIR"]
-USE_SCHEDULER = model_config["USE_SCHEDULER"]
+if model_config["dataset"] == "STL10":
+    train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader = get_stl_data()
+else:
+    train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader = get_cifar_data()
+
 
 class Trainer:
     # -----------------------------------------------INITIALIZE TRAINING-------------------------------------------------------------
-    def __init__(self, device=device, epochs=EPOCHS, batch_size=BATCH_SIZE, save_dir=SAVE_DIR, train_loader=train_dataloader, train_val_loader=train_val_dataloader, valid_loader=test_dataloader, weights=WEIGHTS, verbose=VERBOSE, visualize_plots=VISUALIZE_PLOTS, save_plots=SAVE_PLOTS, model_name=MODEL_NAME, resume=RESUME, resume_dir=RESUME_DIR, use_scheduler = USE_SCHEDULER):
-        self.device = device
-        self.save_dir = save_dir
-        self.batch_size = batch_size
-        self.epochs = epochs
-        self.model_name = model_name
-        self.weights = weights
-        self.visualize_plots = visualize_plots
-        self.save_plots = save_plots
+    def __init__(self, train_loader=train_dataloader, train_val_loader=train_val_dataloader, valid_loader=test_dataloader):
+        self.device = model_config['device']
+        self.save_dir = model_config['SAVE_DIR']
+        self.batch_size = model_config['batch_size']
+        self.epochs = model_config['EPOCHS']
+        self.model_name = model_config['MODEL_NAME']
+        self.weights = model_config['WEIGHTS']
+        self.visualize_plots = model_config["VISUALIZE_PLOTS"]
+        self.save_plots = model_config["SAVE_PLOTS"]
         # 0 == nothing || 1 == model architecture || 2 == print optimizer || 3 == model parameters
-        self.verbose = verbose
+        self.verbose = model_config["VERBOSE"]
         self.train_losses=[]
         self.train_losses_s=[]
         self.val_losses=[]
         self.val_losses_s=[]
         self.conf = {'Basic configs': model_config, 'Max_iter_num' : '', 'Epochs' : self.epochs, 'Trained_epoch' : 0, 'Optimizer' : '', 'Parameter_size' : '', "Model" : ''}
         self.ckpt = False
-        self.resume = resume
-        self.resume_dir = resume_dir
+        self.resume = model_config['RESUME']
+        self.resume_dir = model_config["RESUME_DIR"]
         self.start_epoch = 0
-        self.use_scheduler = use_scheduler
+        self.use_scheduler = model_config["USE_SCHEDULER"]
         self.scheduler = False
         
 
@@ -109,32 +96,19 @@ class Trainer:
 
 
         # get model 
-        self.model, self.conf, self.ckpt = get_model("MOCO8", self.conf, self.resume, self.resume_dir, self.weights, self.verbose)
-        self.model = self.model.to(device)
+        self.model, self.conf, self.ckpt = get_model(model_config["MODEL_NAME"], self.conf, self.resume, self.resume_dir, self.weights, self.verbose)
+        self.model = self.model.to(self.device)
 
         # if self.verbose > 2:
         self.conf = count_parameters(self.logger, self.model, self.conf)
 
-        self.optimizer, self.conf = get_optimizer(self.logger, get_params_groups(self.model), self.conf, self.resume, self.ckpt, optimizer=OPTIMIZER, lr0=model_config["LEARNING_RATE"], momentum=model_config["MOMENTUM"], weight_decay=model_config["WEIGHT_DECAY"], verbose=self.verbose)
+        self.optimizer, self.conf = get_optimizer(self.logger, get_params_groups(self.model), self.conf, self.resume, self.ckpt, model_config['OPTIMIZER'], lr0=model_config["LEARNING_RATE"], momentum=model_config["MOMENTUM"], weight_decay=model_config["WEIGHT_DECAY"], verbose=self.verbose)
         # self.optimizer = torch.optim.SGD(get_params_groups(self.model), lr=0.06, weight_decay=5e-4, momentum=0.9)
 
         if self.resume:
             self.start_epoch = self.ckpt["epoch"] + 1
             self.conf['resume'] += f" from epoch {self.start_epoch}"
         
-        
-        if self.use_scheduler:
-            self.scheduler = CosineAnnealingWarmupRestarts(self.optimizer,
-                                            first_cycle_steps=50,
-                                            cycle_mult=1.0,
-                                            max_lr=model_config["LEARNING_RATE"],
-                                            min_lr=5e-5,
-                                            warmup_steps=30,
-                                            gamma=0.8,
-                                            last_epoch=self.start_epoch if self.resume else -1)
-        # tensorboard
-        
-        # self.tblogger = SummaryWriter(self.save_dir) 
 
 # -------------------------------------------------------------------------------TRAINING PROCESS-----------------------------------------------
     @staticmethod
@@ -181,7 +155,7 @@ class Trainer:
             self.logger.warning('Start Training Process \nTime: {}'.format(time.ctime(self.start_time)))
 
             self.best_loss = np.inf
-            knns = []
+            results = {'KNN_acc@1': []}
 
             # Epoch Loop
             for self.epoch in range(self.start_epoch, self.epochs):
@@ -200,18 +174,23 @@ class Trainer:
                         if self.epoch != 0: 
                             self.train_losses.append(train_loss)
                             self.train_losses_s.append(train_losses)
-                    
-                    print(f"Loss: {train_loss}\nLoss Contrast: {train_losses[0]}\nLoss iso: {train_losses[2]}\nLoss Gaussian: {train_losses[1]}")
-
+                        
                     print('%20s' * 3  % ("Train", f'{self.epoch}/{self.epochs}', train_loss.item()))     
                     self.logger.warning('%20s' * 3  % ("Train", f'{self.epoch}/{self.epochs}', train_loss.item()))                 
 
                     del pbar
             
                     # ############################################################Validation Loop
+                    validation_model = deepcopy(self.model.encoder_q)
+                    if validation_model.fc : 
+                        validation_model.fc = nn.Identity()
+                    knn_acc = knn_monitor(self.logger, validation_model, self.train_val_loader, self.valid_loader, self.epoch, k=200, hide_progress=False)
+                    results['test_acc@1'].append(knn_acc)
 
-                    #     del vbar
-                    if self.epoch % EVALUATION_FREQ == 0 : 
+                    data_frame = pd.DataFrame(data=results, index=range(epoch_start, epoch + 1))
+                    data_frame.to_csv(self.save_dir + '/knn.csv', index_label='epoch')
+
+                    if self.epoch % model_config['EVALUATION_FREQ'] == 0 : 
                         val_labels = []
                         val_embeddings = []
 
@@ -241,10 +220,7 @@ class Trainer:
                         # PLot Embeddings
                         self.plot_embeddings(np.array(val_embeddings), np.array(val_labels), 0)
 
-                        knn_acc = knn_monitor(self.logger, self.model.encoder_q, self.train_val_loader, self.valid_loader, self.epoch, k=200, hide_progress=False)
-                        # knn_acc = knn_monitor(nn.Sequential(self.model.encoder_q, self.model.encoder_q.projection), self.train_val_loader, self.valid_loader, self.epoch, k=200, hide_progress=False)
-
-                        # # Delete Data after PLotting
+                        # Delete Data after PLotting
                         del val_embeddings, val_labels
                         
                         if self.val_loss < self.best_loss:
@@ -265,10 +241,13 @@ class Trainer:
         finally:
             finish_time = time.time()
             print(f'\nTraining completed in {time.ctime(finish_time)} \nIts Done in: {(time.time() - self.start_time) / 3600:.3f} hours.') 
+
+
+
     # -------------------------------------------------------Training Callback after each epoch--------------------------
     def plot_loss(self, train_mean_size=1, val_mean_size=1):
-        FIRST_ = "Contrastive Loss"
-        SECOND_ = "LOSS GAUSSIAN"
+        FIRST_ = "Contrastive Loss1"
+        SECOND_ = "Contrastive Loss2"
         THIRD_ = "ISOKLD LOSS"
 
         COLS=5
