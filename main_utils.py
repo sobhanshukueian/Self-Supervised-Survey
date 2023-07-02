@@ -32,7 +32,7 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import cross_val_score
 
-def get_optimizer(logger, model_parameters, conf, resume, ckpt, optimizer, lr0=0.001, momentum=0.937, weight_decay=0.00005, verbose=1):
+def get_optimizer(logger, model_parameters, conf, resume, ckpt, optimizer, lr0=0.001, momentum=0.937, weight_decay=0.00005):
     assert optimizer == 'SGD' or 'Adam' or 'LARS', 'ERROR: unknown optimizer, use SGD defaulted'
     if optimizer == 'SGD':
         optim = torch.optim.SGD(model_parameters, lr=lr0, momentum=momentum, weight_decay=weight_decay)
@@ -63,7 +63,7 @@ def get_optimizer(logger, model_parameters, conf, resume, ckpt, optimizer, lr0=0
     return optim, conf
 
 # Get Model 
-def get_model(name, conf, resume, save_dir="./", weights=None, device='cpu', verbose=1):
+def get_model(name, conf, resume, save_dir="./", weights=None, device='cpu'):
     if name == "MOCO":
         model = MOCO_MODEL()
     

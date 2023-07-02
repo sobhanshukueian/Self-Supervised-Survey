@@ -30,8 +30,7 @@ from stl_dataset import get_stl_data
 from cifar_dataset import get_cifar_data
 from vis import plot_embeddings
 from configs import model_config
-from utils import LARS, off_diagonal, get_color, get_colors, count_parameters, save, adjust_learning_rate, get_params_groups
-# from BYOL_model import BYOLNetwork
+from utils import get_color, get_colors, count_parameters, save, adjust_learning_rate, get_params_groups
 from main_utils import get_optimizer, get_model
 from knn_eval import knn_monitor
 
@@ -48,8 +47,12 @@ reproducibility(666)
 
 if model_config["dataset"] == "STL10":
     train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader = get_stl_data()
+elif model_config["dataset"] == "CIFAR10":
+    train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader = get_cifar_data()
 else:
     train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader = get_cifar_data()
+    train_dataloader = test_dataloader
+    
 
 
 class Trainer:
@@ -64,7 +67,6 @@ class Trainer:
         self.visualize_plots = model_config["VISUALIZE_PLOTS"]
         self.save_plots = model_config["SAVE_PLOTS"]
         # 0 == nothing || 1 == model architecture || 2 == print optimizer || 3 == model parameters
-        self.verbose = model_config["VERBOSE"]
         self.train_losses=[]
         self.train_losses_s=[]
         self.val_losses=[]
@@ -74,9 +76,6 @@ class Trainer:
         self.resume = model_config['RESUME']
         self.resume_dir = model_config["RESUME_DIR"]
         self.start_epoch = 0
-        self.use_scheduler = model_config["USE_SCHEDULER"]
-        self.scheduler = False
-        
 
         temm=0
         tmp_save_dir = self.save_dir
@@ -97,13 +96,12 @@ class Trainer:
 
 
         # get model 
-        self.model, self.conf, self.ckpt = get_model(model_config["MODEL_NAME"], self.conf, self.resume, self.resume_dir, self.weights, self.verbose)
+        self.model, self.conf, self.ckpt = get_model(model_config["MODEL_NAME"], self.conf, self.resume, self.resume_dir, self.weights)
         self.model = self.model.to(self.device)
 
-        # if self.verbose > 2:
         self.conf = count_parameters(self.logger, self.model, self.conf)
 
-        self.optimizer, self.conf = get_optimizer(self.logger, get_params_groups(self.model), self.conf, self.resume, self.ckpt, model_config['OPTIMIZER'], lr0=model_config["LEARNING_RATE"], momentum=model_config["MOMENTUM"], weight_decay=model_config["WEIGHT_DECAY"], verbose=self.verbose)
+        self.optimizer, self.conf = get_optimizer(self.logger, get_params_groups(self.model), self.conf, self.resume, self.ckpt, model_config['OPTIMIZER'], lr0=model_config["LEARNING_RATE"], momentum=model_config["MOMENTUM"], weight_decay=model_config["WEIGHT_DECAY"])
         # self.optimizer = torch.optim.SGD(get_params_groups(self.model), lr=0.06, weight_decay=5e-4, momentum=0.9)
 
         if self.resume:
@@ -132,21 +130,19 @@ class Trainer:
 
     def train(self):
         self.model.train()
-        adjust_learning_rate(self.optimizer, self.epoch, model_config["LEARNING_RATE"])
+        lr = adjust_learning_rate(self.optimizer, self.epoch, model_config["LEARNING_RATE"])
 
         pbar = enumerate(self.train_loader)
-        pbar = tqdm(pbar, desc=('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss'), total=self.max_stepnum)                        
-        self.logger.warning(('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss'))
+        pbar = tqdm(pbar, desc=('%20s' * 4) % ('Phase' ,'Epoch', 'Total Loss', 'Learning Rate'), total=self.max_stepnum)                        
+        self.logger.warning(('%20s' * 4) % ('Phase' ,'Epoch', 'Total Loss', 'Learning Rate'))
         for step, batch_data in pbar:
             train_loss, train_losses = self.train_step(batch_data)
             if self.epoch != 0: 
                 self.train_losses.append(train_loss)
                 self.train_losses_s.append(train_losses)
             
-        print('%20s' * 3  % ("Train", f'{self.epoch}/{self.epochs}', train_loss.item()))     
-        self.logger.warning('%20s' * 3  % ("Train", f'{self.epoch}/{self.epochs}', train_loss.item()))                 
-
-        del pbar
+        print('%20s' * 4  % ("Train", f'{self.epoch}/{self.epochs}', train_loss.item(), lr))     
+        self.logger.warning('%20s' * 4  % ("Train", f'{self.epoch}/{self.epochs}', train_loss.item(), lr))
 
 
     # Each Validation Step
@@ -255,11 +251,10 @@ class Trainer:
     # -------------------------------------------------------Training Callback after each epoch--------------------------
 
     def sanity_check(self, parameters, initial_params):
-        has_changed = any((param != initial_param).any() for param, initial_param in zip(parameters, initial_params))
-        if has_changed:
-            print("=> Sanity check Rid.")
+        if any((param != initial_param).any() for param, initial_param in zip(parameters, initial_params)):
+            print("=> Sanity checked : Failed. ⛔")
         else :
-            print("=> Sanity check NARid.")
+            print("=> Sanity check : Sucess 👌.")
             
 
 

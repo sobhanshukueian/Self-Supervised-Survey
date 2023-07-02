@@ -148,7 +148,7 @@ def count_parameters(logger, model, conf):
     conf["Parameter_size"] = total_params
     return conf
 
-def save(conf, save_dir, model_name, model, epoch, val_loss, best_loss, optimizer):
+def save(conf, save_dir, model_name, model, epoch, optimizer):
     if not osp.exists(save_dir):
         os.makedirs(save_dir)
     # create config object
@@ -170,11 +170,6 @@ def save(conf, save_dir, model_name, model, epoch, val_loss, best_loss, optimize
             'epoch': epoch,
             }
     torch.save(ckpt, filename)
-    if val_loss == best_loss:
-        best_filename = osp.join(save_ckpt_dir, 'best_{}.pt'.format(model_name, epoch))
-        if osp.exists(best_filename):
-            os.remove(best_filename)
-        shutil.copyfile(filename, best_filename)
 
 class CosineAnnealingWarmupRestarts(_LRScheduler):
     """
@@ -284,7 +279,8 @@ def adjust_learning_rate(optimizer, epoch, learning_rate):
 
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
-    print(f'epoch:{epoch}, lr: {lr}')
+    # print(f'epoch:{epoch}, lr: {lr}')
+    return lr
 
 def adjust_loss_weights(epoch):
     return 0.5 * ( 1. + math.cos(0.1*epoch)) * 100000
