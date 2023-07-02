@@ -135,14 +135,14 @@ class LinearClassifier(nn.Module):
         return self.linear(x)
 
 def count_parameters(logger, model, conf):
-    table = PrettyTable(["Modules", "Parameters"])
+    # table = PrettyTable(["Modules", "Parameters"])
     total_params = 0
     for name, parameter in model.named_parameters():
         if not parameter.requires_grad: continue
         params = parameter.numel()
-        table.add_row([name, params])
+        # table.add_row([name, params])
         total_params+=params
-    print(table)
+    # print(table)
     print(f"Total Trainable Params: {total_params}")
     logger.warning(f"Total Trainable Params: {total_params}")
     conf["Parameter_size"] = total_params
