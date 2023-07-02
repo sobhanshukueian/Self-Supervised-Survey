@@ -120,7 +120,7 @@ class Trainer:
     def train_step(self, batch_data):
         image1, image2, targets = self.prepro_data(batch_data, self.device)
         
-        preds, loss, losses = self.model(image1, image2)
+        preds, loss, losses = self.model(image1, image2, True)
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -141,8 +141,8 @@ class Trainer:
                 self.train_losses.append(train_loss)
                 self.train_losses_s.append(train_losses)
             
-        print('%20s' * 4  % ("Train", f'{self.epoch}/{self.epochs}', train_loss.item(), lr))     
-        self.logger.warning('%20s' * 4  % ("Train", f'{self.epoch}/{self.epochs}', train_loss.item(), lr))
+        print('%20s' * 4  % ("Train", f'{self.epoch}/{self.epochs}', train_loss, lr))     
+        self.logger.warning('%20s' * 4  % ("Train", f'{self.epoch}/{self.epochs}', train_loss, lr))
 
 
     # Each Validation Step
@@ -164,20 +164,16 @@ class Trainer:
 
         for step, batch_data in vbar:
             val_loss, val_embeds, val_targets, val_losses = self.val_step(batch_data)
-
             if self.epoch != 0: 
                 self.val_losses.append(val_loss)
                 self.val_losses_s.append(val_losses)
-
             val_embeddings.extend(val_embeds[0])
             val_labels.extend(val_targets)
-
         print('%20s' * 3 % ("Validation", f'{self.epoch}/{self.epochs}', val_loss))
         self.logger.warning('%20s' * 3 % ("Validation", f'{self.epoch}/{self.epochs}', val_loss))
         
         # PLot Losses
         if self.epoch != 0: self.plot_loss()
-        
         # PLot Embeddings
         plot_embeddings(self.epoch, np.array(val_embeddings), np.array(val_labels), 0)
 
@@ -185,7 +181,7 @@ class Trainer:
         validation_model = deepcopy(self.model.encoder_q)
         # if validation_model.fc : 
         #     validation_model.fc = nn.Identity()
-        knn_acc = knn_monitor(self.logger, validation_model, self.train_val_loader, self.valid_loader, self.epoch, k=200, hide_progress=False)
+        knn_acc = knn_monitor(self.logger, self.model.encoder_q, self.train_val_loader, self.valid_loader, self.epoch, k=200, hide_progress=False)
 
         filename = self.save_dir + "/KNN.csv"
         
@@ -204,7 +200,7 @@ class Trainer:
 
 
     # Training Process
-    def train(self):
+    def run(self):
         try:
             # training process prerequisite
             self.start_time = time.time()
@@ -227,8 +223,10 @@ class Trainer:
 
                     # ###########################################################Validation Loop
 
-                    if self.epoch % model_config['VALIDATION_FREQ'] == 0 : 
-                        self.validation()
+                    # if self.epoch % model_config['VALIDATION_FREQ'] == 0 : 
+                    #     print("--------------------------")
+                    #     self.validation()
+                    #     print("--------------------------")
 
                     if self.epoch == 0:
                         self.sanity_check(self.model.parameters(), initial_params)
@@ -311,6 +309,4 @@ class Trainer:
         if self.visualize_plots:
             plt.show()
 
-Trainer().train()
-
-# Trainer(batch_size=32, device="cpu", epochs=50, verbose=0, weights="/content/runs/weights/best_SSL_epoch_45.pt").run("/content/data/faces/testing/s5/2.pgm", "/content/data/faces/testing/s7/4.pgm")
+Trainer().run()
