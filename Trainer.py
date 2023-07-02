@@ -27,7 +27,7 @@ from torch.cuda import amp
 
 from stl_dataset import get_stl_data
 from cifar_dataset import get_cifar_data
-from vis import show_batch
+from vis import plot_embeddings
 from configs import model_config
 from utils import LARS, off_diagonal, get_color, get_colors, count_parameters, save, adjust_learning_rate, get_params_groups
 # from BYOL_model import BYOLNetwork
@@ -218,7 +218,7 @@ class Trainer:
                         if self.epoch != 0: self.plot_loss()
 
                         # PLot Embeddings
-                        self.plot_embeddings(np.array(val_embeddings), np.array(val_labels), 0)
+                        plot_embeddings(self.epoch, np.array(val_embeddings), np.array(val_labels), 0)
 
                         # Delete Data after PLotting
                         del val_embeddings, val_labels
@@ -295,28 +295,6 @@ class Trainer:
             if not osp.exists(save_plot_dir):
                 os.makedirs(save_plot_dir)
             plt.savefig("{}/epoch-{}-loss-plot.png".format(save_plot_dir, self.epoch)) 
-        if self.visualize_plots:
-            plt.show()
-    def plot_embeddings(self, val_embeddings, val_labels, val_plot_size=0):
-        if val_plot_size > 0:
-            val_embeddings = np.array(val_embeddings[:val_plot_size])
-            val_labels = np.array(val_labels[:val_plot_size])
-
-        OUTPUT_EMBEDDING_SIZE = 10
-
-        COLS = int(OUTPUT_EMBEDDING_SIZE / 2)
-        ROWS = 1
-        fig, ax = plt.subplots(ROWS, COLS, figsize=(COLS*10, ROWS*10))
-        # fig.suptitle("Embeddings Plot", fontsize=16)
-        for dim in range(0, OUTPUT_EMBEDDING_SIZE-1, 2):
-            ax[int(dim/2)].set_title("Validation Samples for {} and {} dimensions".format(dim, dim+1))
-            ax[int(dim/2)].scatter(val_embeddings[:, dim], val_embeddings[:, dim+1], c=get_colors(np.squeeze(val_labels)))
-            
-        if self.save_plots:
-            save_plot_dir = osp.join(self.save_dir, 'plots') 
-            if not osp.exists(save_plot_dir):
-                os.makedirs(save_plot_dir)
-            plt.savefig("{}/epoch-{}-plot.png".format(save_plot_dir, self.epoch)) 
         if self.visualize_plots:
             plt.show()
 

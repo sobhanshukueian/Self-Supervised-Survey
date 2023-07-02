@@ -83,6 +83,8 @@ class MOCO_MODEL(nn.Module):
         batch_size = keys.shape[0]
 
         ptr = int(self.queue_ptr)
+
+        print(self.K, batch_size)
         assert self.K % batch_size == 0  # for simplicity
 
         # replace the keys at ptr (dequeue and enqueue)
