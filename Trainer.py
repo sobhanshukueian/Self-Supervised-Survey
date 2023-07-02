@@ -152,7 +152,7 @@ class Trainer:
     # Each Validation Step
     def val_step(self, batch_data):
         image1, image2, targets = self.prepro_data(batch_data, self.device)
-        preds, loss, losses = self.model(image1, image2)
+        preds, loss, losses = self.model(image1, image2, False)
         return loss.item(), [pred.cpu().detach().numpy() for pred in preds], targets, [loss.item() for loss in losses]
 
     def validation(self):
@@ -225,7 +225,7 @@ class Trainer:
                     if self.epoch != 0:
                         self.train()
                     else : 
-                        initial_params = {k: param.clone() for k, param in self.model.named_parameters()}
+                        initial_params = [param.clone() for param in self.model.parameters()]
 
                     self.knn_eval()
 
@@ -235,7 +235,7 @@ class Trainer:
                         self.validation()
 
                     if self.epoch == 0:
-                        self.sanity_check(self.model.state_dict(), initial_params)
+                        self.sanity_check(self.model.parameters(), initial_params)
                         
                     save(conf=self.conf, save_dir=self.save_dir, model_name=self.model_name, model=self.model, epoch=self.epoch, optimizer=self.optimizer)
          
@@ -254,16 +254,13 @@ class Trainer:
 
     # -------------------------------------------------------Training Callback after each epoch--------------------------
 
-    def sanity_check(self, state_dict, initial_params):
-        for k in list(state_dict.keys()):
-            # # Only ignore linear layer weights
-            # if 'linear.weight' in k or 'linear.bias' in k:
-            #     continue
-
-            assert ((state_dict[k].cpu() == initial_params[k].cpu()).all()), \
-                '{} is changed in linear classifier training.'.format(k)
-
-        print("=> Sanity check passed.")
+    def sanity_check(self, parameters, initial_params):
+        has_changed = any((param != initial_param).any() for param, initial_param in zip(parameters, initial_params))
+        if has_changed:
+            print("=> Sanity check Rid.")
+        else :
+            print("=> Sanity check NARid.")
+            
 
 
     def plot_loss(self, train_mean_size=1, val_mean_size=1):

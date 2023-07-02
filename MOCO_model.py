@@ -172,7 +172,7 @@ class MOCO_MODEL(nn.Module):
 
         return loss, q, k
 
-    def forward(self, im1, im2):
+    def forward(self, im1, im2, train=True):
         """
         Input:
             im_q: a batch of query images
@@ -182,8 +182,9 @@ class MOCO_MODEL(nn.Module):
         """
 
         # update the key encoder
-        with torch.no_grad():  # no gradient to keys
-            self._momentum_update_key_encoder()
+        if train:
+            with torch.no_grad():  # no gradient to keys
+                self._momentum_update_key_encoder()
 
         # compute loss
         loss_12, q1, k2 = self.contrastive_loss(im1, im2)
@@ -193,7 +194,7 @@ class MOCO_MODEL(nn.Module):
 
         loss = loss_total 
         k = torch.cat([k1, k2], dim=0)
-        self._dequeue_and_enqueue(k)
+        if train: self._dequeue_and_enqueue(k)
 
         return (q1, q2), loss, [loss_12, loss_21, loss_12]
 
