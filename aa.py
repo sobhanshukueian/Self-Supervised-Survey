@@ -14,18 +14,32 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import random
+import numpy as np
 
 
 
+def reproducibility(SEED):
+    os.environ['PYTHONHASHSEED'] = str(SEED)
+    torch.manual_seed(SEED)
+    torch.backends.cudnn.deterministic = True
+    torch.use_deterministic_algorithms(True)
+    torch.backends.cudnn.benchmark = False
+    np.random.seed(SEED)
+    random.seed(SEED)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(SEED)
+
+reproducibility(3)
 
 
 def seed_worker(worker_id):
     worker_seed = torch.initial_seed() % 2**32
-    numpy.random.seed(worker_seed)
+    np.random.seed(worker_seed)
     random.seed(worker_seed)
 
 g = torch.Generator()
-g.manual_seed(0)
+g.manual_seed(3)
 
 
 
@@ -105,13 +119,13 @@ test_transform = transforms.Compose([
 
 # data prepare
 train_data = CIFAR10Pair(root='data', train=True, transform=train_transform, download=True)
-train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=False, num_workers=16, pin_memory=True, drop_last=True, worker_init_fn=seed_worker)
+train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=False, num_workers=16, pin_memory=True, drop_last=True, worker_init_fn=seed_worker, generator=g)
 
 memory_data = CIFAR10(root='data', train=True, transform=test_transform, download=True)
-memory_loader = DataLoader(memory_data, batch_size=args.batch_size, shuffle=False, num_workers=16, pin_memory=True, worker_init_fn=seed_worker)
+memory_loader = DataLoader(memory_data, batch_size=args.batch_size, shuffle=False, num_workers=16, pin_memory=True, worker_init_fn=seed_worker, generator=g)
 
 test_data = CIFAR10(root='data', train=False, transform=test_transform, download=True)
-test_loader = DataLoader(test_data, batch_size=args.batch_size, shuffle=False, num_workers=16, pin_memory=True, worker_init_fn=seed_worker)
+test_loader = DataLoader(test_data, batch_size=args.batch_size, shuffle=False, num_workers=16, pin_memory=True, worker_init_fn=seed_worker, generator=g)
 
 
 
@@ -415,20 +429,6 @@ def knn_predict(feature, feature_bank, feature_labels, classes, knn_k, knn_t):
     pred_labels = pred_scores.argsort(dim=-1, descending=True)
     return pred_labels
 
-
-
-
-
-
-
-def reproducibility(SEED):
-    torch.manual_seed(SEED)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    np.random.seed(SEED)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(SEED)
-reproducibility(666)
 
 
 

@@ -42,18 +42,18 @@ test_transform = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize([0.4914, 0.4822, 0.4465], [0.2023, 0.1994, 0.2010])])
 
-def get_cifar_data(seed_worker):
+def get_cifar_data(seed_worker, g):
     # data prepare
     train_data = CIFAR10Pair(train=True, transform=train_transform)
-    train_dataloader = DataLoader(train_data, batch_size=model_config["batch_size"], shuffle=False, num_workers=0, pin_memory=True, drop_last=True, worker_init_fn=seed_worker)
+    train_dataloader = DataLoader(train_data, batch_size=model_config["batch_size"], shuffle=False, num_workers=0, pin_memory=True, drop_last=True, worker_init_fn=seed_worker, generator=g)
 
     train_val_data= CIFAR10(root=root_path, train=True, transform=test_transform, download=True)
-    train_val_dataloader  = DataLoader(train_val_data, batch_size=model_config["batch_size"], shuffle=False, num_workers=0, pin_memory=True, worker_init_fn=seed_worker)
+    train_val_dataloader  = DataLoader(train_val_data, batch_size=model_config["batch_size"], shuffle=False, num_workers=0, pin_memory=True, worker_init_fn=seed_worker, generator=g)
 
     test_data = CIFAR10Pair(train=False, transform=test_transform)
-    test_dataloader = DataLoader(test_data, batch_size=model_config["batch_size"], shuffle=False, num_workers=0, pin_memory=True, drop_last=True, worker_init_fn=seed_worker)
+    test_dataloader = DataLoader(test_data, batch_size=model_config["batch_size"], shuffle=False, num_workers=0, pin_memory=True, drop_last=True, worker_init_fn=seed_worker, generator=g)
 
-    vis_dataloader = DataLoader(train_data, shuffle=True, num_workers=0, batch_size=model_config["show_batch_size"], worker_init_fn=seed_worker)
+    vis_dataloader = DataLoader(train_data, shuffle=True, num_workers=0, batch_size=model_config["show_batch_size"], worker_init_fn=seed_worker, generator=g)
     return train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader
 
 

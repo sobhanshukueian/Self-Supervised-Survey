@@ -38,12 +38,8 @@ from knn_eval import knn_monitor
 
 def seed_worker(worker_id):
     worker_seed = torch.initial_seed() % 2**32
-    numpy.random.seed(worker_seed)
+    np.random.seed(worker_seed)
     random.seed(worker_seed)
-
-g = torch.Generator()
-g.manual_seed(0)
-
 
 def reproducibility(SEED):
     os.environ['PYTHONHASHSEED'] = str(SEED)
@@ -55,15 +51,19 @@ def reproducibility(SEED):
     random.seed(SEED)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(SEED)
-reproducibility(666)
+
+reproducibility(3)
+
+g = torch.Generator()
+g.manual_seed(3)
 
 
 if model_config["dataset"] == "STL10":
-    train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader = get_stl_data(seed_worker)
+    train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader = get_stl_data(seed_worker, g)
 elif model_config["dataset"] == "CIFAR10":
-    train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader = get_cifar_data(seed_worker)
+    train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader = get_cifar_data(seed_worker, g)
 else:
-    train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader = get_cifar_data(seed_worker)
+    train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader = get_cifar_data(seed_worker, g)
     train_dataloader = test_dataloader
     
 
