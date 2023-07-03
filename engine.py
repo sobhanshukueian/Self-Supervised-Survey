@@ -135,12 +135,24 @@ class Trainer:
         pbar = enumerate(self.train_loader)
         pbar = tqdm(pbar, desc=('%20s' * 4) % ('Phase' ,'Epoch', 'Total Loss', 'Learning Rate'), total=self.max_stepnum)                        
         self.logger.warning(('%20s' * 4) % ('Phase' ,'Epoch', 'Total Loss', 'Learning Rate'))
-        for step, batch_data in pbar:
-            train_loss, train_losses = self.train_step(batch_data)
+        total_loss, total_num = 0.0, 0
+        for step, (im_1, im_2) in pbar:
+            im_1, im_2 = im_1.cuda(non_blocking=True), im_2.cuda(non_blocking=True)
+
+            preds, train_loss, train_losses = self.model(im_1, im_2, True)
+
+            self.optimizer.zero_grad()
+            train_loss.backward()
+            self.optimizer.step()
+            
+            total_num += self.train_loader.batch_size
+            total_loss += train_loss.item() * self.train_loader.batch_size
+
             if self.epoch != 0: 
-                self.train_losses.append(train_loss)
-                self.train_losses_s.append(train_losses)
-            pbar.set_postfix({'loss':train_loss})
+                self.train_losses.append(total_loss/total_num)
+                self.train_losses_s.append([loss.item() for loss in train_losses])
+
+            pbar.set_postfix({'loss':total_loss/total_num})
             
         print('%20s' * 4  % ("Train", f'{self.epoch}/{self.epochs}', train_loss, lr))     
         self.logger.warning('%20s' * 4  % ("Train", f'{self.epoch}/{self.epochs}', train_loss, lr))
