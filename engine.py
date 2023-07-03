@@ -16,7 +16,7 @@ import pandas as pd
 import csv
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 from utils import CosineAnnealingWarmupRestarts, set_logging
-
+import random
 
 import torch
 import torchvision.utils
@@ -35,22 +35,35 @@ from main_utils import get_optimizer, get_model
 from knn_eval import knn_monitor
 
 
+
+def seed_worker(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    numpy.random.seed(worker_seed)
+    random.seed(worker_seed)
+
+g = torch.Generator()
+g.manual_seed(0)
+
+
 def reproducibility(SEED):
+    os.environ['PYTHONHASHSEED'] = str(SEED)
     torch.manual_seed(SEED)
     torch.backends.cudnn.deterministic = True
+    torch.use_deterministic_algorithms(True)
     torch.backends.cudnn.benchmark = False
     np.random.seed(SEED)
+    random.seed(SEED)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(SEED)
 reproducibility(666)
 
 
 if model_config["dataset"] == "STL10":
-    train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader = get_stl_data()
+    train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader = get_stl_data(seed_worker)
 elif model_config["dataset"] == "CIFAR10":
-    train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader = get_cifar_data()
+    train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader = get_cifar_data(seed_worker)
 else:
-    train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader = get_cifar_data()
+    train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader = get_cifar_data(seed_worker)
     train_dataloader = test_dataloader
     
 

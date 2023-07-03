@@ -19,6 +19,14 @@ import torch.nn.functional as F
 
 
 
+def seed_worker(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    numpy.random.seed(worker_seed)
+    random.seed(worker_seed)
+
+g = torch.Generator()
+g.manual_seed(0)
+
 
 
 parser = argparse.ArgumentParser(description='Train MoCo on CIFAR-10')
@@ -97,13 +105,13 @@ test_transform = transforms.Compose([
 
 # data prepare
 train_data = CIFAR10Pair(root='data', train=True, transform=train_transform, download=True)
-train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=False, num_workers=16, pin_memory=True, drop_last=True)
+train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=False, num_workers=16, pin_memory=True, drop_last=True, worker_init_fn=seed_worker)
 
 memory_data = CIFAR10(root='data', train=True, transform=test_transform, download=True)
-memory_loader = DataLoader(memory_data, batch_size=args.batch_size, shuffle=False, num_workers=16, pin_memory=True)
+memory_loader = DataLoader(memory_data, batch_size=args.batch_size, shuffle=False, num_workers=16, pin_memory=True, worker_init_fn=seed_worker)
 
 test_data = CIFAR10(root='data', train=False, transform=test_transform, download=True)
-test_loader = DataLoader(test_data, batch_size=args.batch_size, shuffle=False, num_workers=16, pin_memory=True)
+test_loader = DataLoader(test_data, batch_size=args.batch_size, shuffle=False, num_workers=16, pin_memory=True, worker_init_fn=seed_worker)
 
 
 
