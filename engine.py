@@ -136,7 +136,7 @@ class Trainer:
         pbar = tqdm(pbar, desc=('%20s' * 4) % ('Phase' ,'Epoch', 'Total Loss', 'Learning Rate'), total=self.max_stepnum)                        
         self.logger.warning(('%20s' * 4) % ('Phase' ,'Epoch', 'Total Loss', 'Learning Rate'))
         total_loss, total_num = 0.0, 0
-        for step, (im_1, im_2) in pbar:
+        for step, (im_1, im_2, _) in pbar:
             im_1, im_2 = im_1.cuda(non_blocking=True), im_2.cuda(non_blocking=True)
 
             preds, train_loss, train_losses = self.model(im_1, im_2, True)

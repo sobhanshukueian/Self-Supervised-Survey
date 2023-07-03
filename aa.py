@@ -97,7 +97,7 @@ test_transform = transforms.Compose([
 
 # data prepare
 train_data = CIFAR10Pair(root='data', train=True, transform=train_transform, download=True)
-train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=True)
+train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=False, num_workers=16, pin_memory=True, drop_last=True)
 
 memory_data = CIFAR10(root='data', train=True, transform=test_transform, download=True)
 memory_loader = DataLoader(memory_data, batch_size=args.batch_size, shuffle=False, num_workers=16, pin_memory=True)
