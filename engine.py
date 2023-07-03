@@ -45,7 +45,7 @@ def reproducibility(SEED):
     os.environ['PYTHONHASHSEED'] = str(SEED)
     torch.manual_seed(SEED)
     torch.backends.cudnn.deterministic = True
-    torch.use_deterministic_algorithms(True)
+    # torch.use_deterministic_algorithms(True)
     torch.backends.cudnn.benchmark = False
     np.random.seed(SEED)
     random.seed(SEED)
