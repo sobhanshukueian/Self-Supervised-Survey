@@ -48,8 +48,6 @@ def plot_embeddings(epoch, val_embeddings, val_labels, val_plot_size=0):
     if model_config["VISUALIZE_PLOTS"]:
         plt.show()
     
-    plt.close('all')
-
     # fig, ax = plt.subplots(2, cols, figsize=(cols*20, 2*20))
     # for index in range(cols):
     #     ax[0, index].imshow(data[0][index].view(3, image_size,image_size).permute(1 , 2 , 0), interpolation='nearest')

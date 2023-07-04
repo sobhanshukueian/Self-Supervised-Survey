@@ -18,6 +18,7 @@ from configs import model_config
 from models.moco import MOCO_MODEL
 from models.moco_var import MOCO_VAR_MODEL
 from models.simsiam import SimSiam_MODEL
+import models
 
 # from MOCOO_model2 import MOCOOOOOOO
 # from MOCOO_model3 import MOCO3
@@ -73,7 +74,8 @@ def get_model(name, conf, resume, save_dir="./", weights=None, device='cpu'):
         model = MOCO_VAR_MODEL()
     elif name == "SimSiam":
         model = SimSiam_MODEL()
-    
+    elif name == "SimSiam_VAR":
+        model = SimSiam_VAR_MODEL()
     # if name == "Barlow":
     #     model = Barlow_model()
     # elif name == "byol":
