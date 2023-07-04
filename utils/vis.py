@@ -4,7 +4,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import torchvision.utils as vutils
 import os
-from utils import get_colors
+from utils.utils import get_colors
 import numpy as np
 import os.path as osp
 

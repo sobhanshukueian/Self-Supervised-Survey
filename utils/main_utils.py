@@ -9,13 +9,15 @@ import matplotlib.pyplot as plt
 import torchvision
 import torch.nn as nn
 
-from utils import LARS
+from utils.utils import LARS
 # from Barlow_model import Barlow_model
 # from BYOL_model import BYOLNetwork
 # from BYOL_PA_model import BYOLPANetwork 
 # from MOCO_model2 import MOCO
 from configs import model_config
-from MOCO_model import MOCO_MODEL
+from models.moco import MOCO_MODEL
+from models.moco_var import MOCO_VAR_MODEL
+
 # from MOCOO_model2 import MOCOOOOOOO
 # from MOCOO_model3 import MOCO3
 # from MOCOO_model4 import MOCO4
@@ -66,6 +68,8 @@ def get_optimizer(logger, model_parameters, conf, resume, ckpt, optimizer, lr0=0
 def get_model(name, conf, resume, save_dir="./", weights=None, device='cpu'):
     if name == "MOCO":
         model = MOCO_MODEL()
+    elif name == "MOCO_VAR":
+        model = MOCO_VAR_MODEL()
     
     # if name == "Barlow":
     #     model = Barlow_model()

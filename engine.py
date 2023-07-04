@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import csv
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
-from utils import CosineAnnealingWarmupRestarts, set_logging
+from utils.utils import CosineAnnealingWarmupRestarts, set_logging
 import random
 
 import torch
@@ -26,12 +26,12 @@ from torch import optim
 import torch.nn.functional as F
 from torch.cuda import amp
 
-from stl_dataset import get_stl_data
-from cifar_dataset import get_cifar_data
-from vis import plot_embeddings
+from data.stl_dataset import get_stl_data
+from data.cifar_dataset import get_cifar_data
+from utils.vis import plot_embeddings
 from configs import model_config
-from utils import get_color, get_colors, count_parameters, save, adjust_learning_rate, get_params_groups
-from main_utils import get_optimizer, get_model
+from utils.utils import get_color, get_colors, count_parameters, save, adjust_learning_rate, get_params_groups
+from utils.main_utils import get_optimizer, get_model
 from knn_eval import knn_monitor
 
 
@@ -167,8 +167,8 @@ class Trainer:
 
             pbar.set_postfix({'loss':total_loss/total_num})
             
-        print('%20s' * 4  % ("Train", f'{self.epoch}/{self.epochs}', train_loss, lr))     
-        self.logger.warning('%20s' * 4  % ("Train", f'{self.epoch}/{self.epochs}', train_loss, lr))
+        print('%20s' * 4  % ("Train", f'{self.epoch}/{self.epochs}', total_loss/total_num, lr))     
+        self.logger.warning('%20s' * 4  % ("Train", f'{self.epoch}/{self.epochs}', total_loss/total_num, lr))
 
 
     # Each Validation Step
