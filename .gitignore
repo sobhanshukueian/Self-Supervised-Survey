@@ -1,9 +1,6 @@
 runs
-VSS.py
-VSS_model.py
-__pycache__
-byol
 moco
-data
 mocoo
 mocooo
+aa.py
+__pycache__
