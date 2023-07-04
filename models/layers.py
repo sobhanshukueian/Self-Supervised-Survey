@@ -9,6 +9,8 @@ import torch.nn.functional as F
 
 
 import copy
+from configs import model_config
+
 
 def make_divisible(x, divisor):
     # Upward revision the value x to make it evenly divisible by the divisor.

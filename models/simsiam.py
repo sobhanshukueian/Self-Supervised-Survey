@@ -53,7 +53,7 @@ class SimSiam_MODEL(nn.Module):
     """
     Build a SimSiam model.
     """
-    def __init__(self, base_encoder, dim=model_config["EMBEDDING_SIZE"], arch='resnet18'):
+    def __init__(self, dim=model_config["EMBEDDING_SIZE"], arch='resnet18'):
         """
         dim: feature dimension (default: 2048)
         arch: Backbone architecture
@@ -78,7 +78,7 @@ class SimSiam_MODEL(nn.Module):
 
         self.criterion = nn.CosineSimilarity(dim=1).to(model_config["device"])
 
-    def forward(self, x1, x2):
+    def forward(self, x1, x2, train=False):
         """
         Input:
             x1: first views of images
@@ -95,6 +95,6 @@ class SimSiam_MODEL(nn.Module):
         p1 = self.predictor(z1) # NxC
         p2 = self.predictor(z2) # NxC
 
-        loss = -(self.criterion(p1, z2).mean() + self.criterion(p2, z1).mean()) * 0.5
+        loss = -(self.criterion(p1, z2.detach()).mean() + self.criterion(p2, z1.detach()).mean()) * 0.5
 
         return (z1, p1), loss, [loss, loss, loss]
