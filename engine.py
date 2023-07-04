@@ -204,10 +204,10 @@ class Trainer:
         plot_embeddings(self.epoch, np.array(val_embeddings), np.array(val_labels), 0)
 
     def knn_eval(self):
-        validation_model = deepcopy(self.model.encoder_q)
+        validation_model = deepcopy(self.model.encoder)
         # if validation_model.fc : 
         #     validation_model.fc = nn.Identity()
-        knn_acc = knn_monitor(self.logger, self.model.encoder_q, self.train_val_loader, self.valid_loader, self.epoch, k=200, hide_progress=False)
+        knn_acc = knn_monitor(self.logger, validation_model, self.train_val_loader, self.valid_loader, self.epoch, k=200, hide_progress=False)
 
         filename = self.save_dir + "/KNN.csv"
         
