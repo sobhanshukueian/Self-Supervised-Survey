@@ -18,7 +18,7 @@ from configs import model_config
 from models.moco import MOCO_MODEL
 from models.moco_var import MOCO_VAR_MODEL
 from models.simsiam import SimSiam_MODEL
-import models
+from models.simsiam_var import SimSiam_VAR_MODEL
 
 # from MOCOO_model2 import MOCOOOOOOO
 # from MOCOO_model3 import MOCO3
