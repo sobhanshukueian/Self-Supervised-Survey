@@ -22,13 +22,19 @@ class GaussianProjection(nn.Module):
         # init.zeros_(self.mean.weight)
 
         # Set the bias to zero
-        self.var.bias.data.zero_()
-        # Set the weights to zero
-        self.var.weight.data.zero_()
+        # self.var.bias.data.zero_()
+        # # Set the weights to zero
+        # self.var.weight.data.zero_()
 
+        # self.mean.bias.data.zero_()
+        # # Set the weights to zero
+        # self.mean.weight.data.zero_()
+
+        self.var.weight.data.normal_(mean=0.0, std=0.01)
+        self.var.bias.data.zero_()
+
+        self.mean.weight.data.normal_(mean=0.0, std=0.01)
         self.mean.bias.data.zero_()
-        # Set the weights to zero
-        self.mean.weight.data.zero_()
 
 
     def get_mlp_block(self, in_ch):

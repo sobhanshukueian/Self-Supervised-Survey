@@ -116,7 +116,7 @@ class MOCO_VAR_MODEL(nn.Module):
             k_mean, k_var = self.encoder_k_gaussian(k)
 
 
-        mean = torch.cat([q_mean, k_mean], dim=0)
+        mean = torch.cat([q_mean, k_mean.detach()], dim=0)
         cos_sim = F.cosine_similarity(mean[:,None,:], mean[None,:,:], dim=-1)
         self_mask = torch.eye(cos_sim.shape[0], dtype=torch.bool, device=cos_sim.device)
         cos_sim.masked_fill_(self_mask, -9e15)
@@ -177,6 +177,9 @@ class MOCO_VAR_MODEL(nn.Module):
 
         if train:
             self._dequeue_and_enqueue(k)
+
+        print("\nloss Guassian mean: {}\nloss iso KLD: {}\nloss contrastive: {}".format(loss_gaussian_total, iso_kl_total, loss_total))
+
 
         return (q1, q2), loss, [loss_total, loss_gaussian_total, iso_kl_total]
 
