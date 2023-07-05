@@ -13,39 +13,8 @@ from configs import model_config
 from models.variation import GaussianProjection
 from models.layers import MLP
 import copy
+from models.layers import ModelBase
 
-
-class ModelBase(nn.Module):
-    """
-    Common CIFAR ResNet recipe.
-    Comparing with ImageNet ResNet recipe, it:
-    (i) replaces conv1 with kernel=3, str=1
-    (ii) removes pool1
-    """
-    def __init__(self, feature_dim=128, arch=None):
-        super(ModelBase, self).__init__()
-
-        # use split batchnorm
-        norm_layer = nn.BatchNorm2d
-        resnet_arch = getattr(resnet, arch)
-        net = resnet_arch(num_classes=feature_dim, norm_layer=norm_layer)
-
-        self.net = []
-        for name, module in net.named_children():
-            if name == 'conv1':
-                module = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
-            if isinstance(module, nn.MaxPool2d):
-                continue
-            if isinstance(module, nn.Linear):
-                self.net.append(nn.Flatten(1))
-            self.net.append(module)
-
-        self.net = nn.Sequential(*self.net)
-
-    def forward(self, x):
-        x = self.net(x)
-        # note: not normalized here
-        return x
 
 
 
@@ -122,8 +91,8 @@ class SimSiam_VAR_MODEL(nn.Module):
 
         iso_kl_total = 0.001 * self.iso_kl(p1_mean, p1_var) +  0.001 * self.iso_kl(p2_mean, p2_var)
 
-        loss_gaussian_total = self.gaussian_mean_loss(p1_mean, z2_mean.detach()) + self.gaussian_mean_loss(p2_mean, z1_mean.detach())
-
+        # loss_gaussian_total = self.gaussian_mean_loss(p1_mean, z2_mean.detach()) + self.gaussian_mean_loss(p2_mean, z1_mean.detach())
+        loss_gaussian_total = -(self.criterion(p1_mean, z2_mean.detach()).mean() + self.criterion(p2_mean, z1_mean.detach()).mean()) * 0.5
         contrastive_loss = -(self.criterion(p1, z2.detach()).mean() + self.criterion(p2, z1.detach()).mean()) * 0.5
 
         loss = contrastive_loss + loss_gaussian_total + iso_kl_total

@@ -10,14 +10,13 @@ import torch.nn.init as init
 
 
 from configs import model_config
+from models.layers import ModelBase
 from models.layers import MLP
 import copy
-from models.layers import ModelBase
 
 
 
-
-class SimSiam_MODEL(nn.Module):
+class SimCLR_MODEL(nn.Module):
     """
     Build a SimSiam model.
     """
@@ -33,18 +32,20 @@ class SimSiam_MODEL(nn.Module):
 
         self.projector = MLP(dim, dim)
 
-        self.encoder = nn.Sequential(
-            self.backbone,
-            self.projector
-        )
+    def contrastive_loss(x, t=0.5):
+        x = F.normalize(x, dim=1)
+        x_scores =  (x @ x.t()).clamp(min=1e-7)  # normalized cosine similarity scores
+        x_scale = x_scores / t   # scale with temperature
 
-        # build a 2-layer predictor
-        self.predictor = nn.Sequential(nn.Linear(dim, model_config["HIDDEN_SIZE"], bias=False),
-                                        nn.BatchNorm1d(model_config["HIDDEN_SIZE"]),
-                                        nn.ReLU(inplace=True), # hidden layer
-                                        nn.Linear(model_config["HIDDEN_SIZE"], dim)) # output layer
+        # (2N-1)-way softmax without the score of i-th entry itself.
+        # Set the diagonals to be large negative values, which become zeros after softmax.
+        x_scale = x_scale - torch.eye(x_scale.size(0)).to(x_scale.device) * 1e5
 
-        self.criterion = nn.CosineSimilarity(dim=1).to(model_config["device"])
+        # targets 2N elements.
+        targets = torch.arange(x.size()[0])
+        targets[::2] += 1  # target of 2k element is 2k+1
+        targets[1::2] -= 1  # target of 2k+1 element is 2k
+        return F.cross_entropy(x_scale, targets.long().to(x_scale.device))
 
     def forward(self, x1, x2, train=False):
         """
@@ -61,8 +62,8 @@ class SimSiam_MODEL(nn.Module):
         z2 = self.encoder(x2) # NxC
 
         p1 = self.predictor(z1) # NxC
-        p2 = self.predictor(z2) # NxC
+        p2 = self.projector(z) # NxC
 
-        loss = -(self.criterion(p1, z2.detach()).mean() + self.criterion(p2, z1.detach()).mean()) * 0.5
+        loss = self.contrastive_loss(p)
 
         return (z1, p1), loss, [loss, loss, loss]

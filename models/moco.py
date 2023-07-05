@@ -12,40 +12,9 @@ import torch.nn.init as init
 
 
 from configs import model_config
+from models.layers import ModelBase
 import copy
 
-
-class ModelBase(nn.Module):
-    """
-    Common CIFAR ResNet recipe.
-    Comparing with ImageNet ResNet recipe, it:
-    (i) replaces conv1 with kernel=3, str=1
-    (ii) removes pool1
-    """
-    def __init__(self, feature_dim=128, arch=None):
-        super(ModelBase, self).__init__()
-
-        # use split batchnorm
-        norm_layer = nn.BatchNorm2d
-        resnet_arch = getattr(resnet, arch)
-        net = resnet_arch(num_classes=feature_dim, norm_layer=norm_layer)
-
-        self.net = []
-        for name, module in net.named_children():
-            if name == 'conv1':
-                module = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
-            if isinstance(module, nn.MaxPool2d):
-                continue
-            if isinstance(module, nn.Linear):
-                self.net.append(nn.Flatten(1))
-            self.net.append(module)
-
-        self.net = nn.Sequential(*self.net)
-
-    def forward(self, x):
-        x = self.net(x)
-        # note: not normalized here
-        return x
 
 class MOCO_MODEL(nn.Module):
     def __init__(self, dim=128, K=4096, m=0.99, T=0.1, arch='resnet18', symmetric=False):
@@ -57,10 +26,10 @@ class MOCO_MODEL(nn.Module):
         self.symmetric = symmetric
 
         # create the encoders
-        self.encoder_q = ModelBase(feature_dim=dim, arch=arch)
+        self.encoder = ModelBase(feature_dim=dim, arch=arch)
         self.encoder_k = ModelBase(feature_dim=dim, arch=arch)
 
-        for param_q, param_k in zip(self.encoder_q.parameters(), self.encoder_k.parameters()):
+        for param_q, param_k in zip(self.encoder.parameters(), self.encoder_k.parameters()):
             param_k.data.copy_(param_q.data)  # initialize
             param_k.requires_grad = False  # not update by gradient
 
@@ -75,7 +44,7 @@ class MOCO_MODEL(nn.Module):
         """
         Momentum update of the key encoder
         """
-        for param_q, param_k in zip(self.encoder_q.parameters(), self.encoder_k.parameters()):
+        for param_q, param_k in zip(self.encoder.parameters(), self.encoder_k.parameters()):
             param_k.data = param_k.data * self.m + param_q.data * (1. - self.m)
 
     @torch.no_grad()
@@ -113,7 +82,7 @@ class MOCO_MODEL(nn.Module):
 
     def contrastive_loss(self, im_q, im_k):
         # compute query features
-        q = self.encoder_q(im_q)  # queries: NxC
+        q = self.encoder(im_q)  # queries: NxC
         q = nn.functional.normalize(q, dim=1)  # already normalized
 
         # compute key features
@@ -179,4 +148,4 @@ class MOCO_MODEL(nn.Module):
 # create model
 # model = ModelMoCo().cuda()
     
-# print(model.encoder_q)
+# print(model.encoder)
