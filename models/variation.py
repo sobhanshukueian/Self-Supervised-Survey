@@ -18,8 +18,17 @@ class GaussianProjection(nn.Module):
         self.mean = nn.Linear(model_config["PROJECTION_SIZE"], model_config["PROJECTION_SIZE"])
         self.var = nn.Linear(model_config["PROJECTION_SIZE"], model_config["PROJECTION_SIZE"])
 
-        init.zeros_(self.var.weight)
-        init.zeros_(self.mean.weight)
+        # init.zeros_(self.var.weight)
+        # init.zeros_(self.mean.weight)
+
+        # Set the bias to zero
+        self.var.bias.data.zero_()
+        # Set the weights to zero
+        self.var.weight.data.zero_()
+
+        self.mean.bias.data.zero_()
+        # Set the weights to zero
+        self.mean.weight.data.zero_()
 
 
     def get_mlp_block(self, in_ch):
