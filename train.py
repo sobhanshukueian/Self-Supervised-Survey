@@ -1,4 +1,6 @@
 from engine import Trainer
+from configs import model_config
+import os
 # import argparse
 
 
@@ -51,4 +53,14 @@ args = parser.parse_args()  # running in command line
 
 
 if __name__ == '__main__':
+
+    tmp_save_dir = model_config["SAVE_DIR"]
+    temm = 0
+
+    while os.path.exists(tmp_save_dir):
+        temm += 1
+        tmp_save_dir = f"{model_config['SAVE_DIR']}{temm}"
+
+    model_config["SAVE_DIR"] = tmp_save_dir
+    print("Save Project in {} directory.".format(model_config["SAVE_DIR"]))
     Trainer().run()

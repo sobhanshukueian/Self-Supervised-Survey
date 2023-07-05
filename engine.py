@@ -90,15 +90,15 @@ class Trainer:
         self.resume_dir = model_config["RESUME_DIR"]
         self.start_epoch = 0
 
-        temm=0
-        tmp_save_dir = self.save_dir
-        while osp.exists(tmp_save_dir):
-            tmp_save_dir = self.save_dir
-            temm+=1
-            tmp_save_dir += (str(temm))
-        self.save_dir = tmp_save_dir
-        del temm
-        print("Save Project in {} directory.".format(self.save_dir))
+        # temm=0
+        # tmp_save_dir = self.save_dir
+        # while osp.exists(tmp_save_dir):
+        #     tmp_save_dir = self.save_dir
+        #     temm+=1
+        #     tmp_save_dir += (str(temm))
+        # self.save_dir = tmp_save_dir
+        # del temm
+        # print("Save Project in {} directory.".format(self.save_dir))
 
         self.logger = set_logging(self.save_dir, self.model_name)
 
