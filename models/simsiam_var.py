@@ -91,8 +91,8 @@ class SimSiam_VAR_MODEL(nn.Module):
 
         iso_kl_total = 0.001 * self.iso_kl(p1_mean, p1_var) +  0.001 * self.iso_kl(p2_mean, p2_var)
 
-        # loss_gaussian_total = self.gaussian_mean_loss(p1_mean, z2_mean.detach()) + self.gaussian_mean_loss(p2_mean, z1_mean.detach())
-        loss_gaussian_total = -(self.criterion(p1_mean, z2_mean.detach()).mean() + self.criterion(p2_mean, z1_mean.detach()).mean()) * 0.5
+        loss_gaussian_total = self.gaussian_mean_loss(p1_mean, z2_mean.detach()) + self.gaussian_mean_loss(p2_mean, z1_mean.detach())
+        # loss_gaussian_total = -(self.criterion(p1_mean, z2_mean.detach()).mean() + self.criterion(p2_mean, z1_mean.detach()).mean()) * 0.5
         contrastive_loss = -(self.criterion(p1, z2.detach()).mean() + self.criterion(p2, z1.detach()).mean()) * 0.5
 
         loss = contrastive_loss + loss_gaussian_total + iso_kl_total

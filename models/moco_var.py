@@ -178,7 +178,7 @@ class MOCO_VAR_MODEL(nn.Module):
         if train:
             self._dequeue_and_enqueue(k)
 
-        print("\nloss Guassian mean: {}\nloss iso KLD: {}\nloss contrastive: {}".format(loss_gaussian_total, iso_kl_total, loss_total))
+        # print("loss Guassian mean: {}\nloss iso KLD: {}\nloss contrastive: {}".format(loss_gaussian_total, iso_kl_total, loss_total))
 
 
         return (q1, q2), loss, [loss_total, loss_gaussian_total, iso_kl_total]

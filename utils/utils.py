@@ -128,7 +128,7 @@ class LinearClassifier(nn.Module):
         self.num_labels = num_labels
         self.linear = nn.Linear(dim, num_labels)
         self.linear.weight.data.normal_(mean=0.0, std=0.01)
-        self.linear..data.zero_()
+        self.linear.bias.data.zero_()
 
     def forward(self, x):
         # linear layer
