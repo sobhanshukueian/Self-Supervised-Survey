@@ -25,10 +25,10 @@ import torch.nn.functional as F
 from torch.cuda import amp
 
 from data.stl_dataset import get_stl_data
-from data.cifar_dataset import get_cifar_data
+from data.cifar_dataset import get_cifar_test
 from utils.vis import plot_embeddings
 from configs import model_config
-from utils.utils import get_color, get_colors, count_parameters, save, adjust_learning_rate, get_params_groups
+from utils.utils import get_color, get_colors, count_parameters, save, adjust_learning_rate, get_params_groups, LinearClassifier, accuracy
 from utils.main_utils import get_optimizer, get_model
 from knn_eval import knn_monitor
 
@@ -56,17 +56,17 @@ g = torch.Generator()
 g.manual_seed(3)
 
 if model_config["dataset"] == "STL10":
-    train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader = get_stl_data(seed_worker, g)
+    train_dataloader, test_dataloader = get_stl_data(seed_worker, g)
 elif model_config["dataset"] == "CIFAR10":
-    train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader = get_cifar_data(seed_worker, g)
+    train_dataloader, test_dataloader = get_cifar_test(seed_worker, g)
 else:
-    train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader = get_cifar_data(seed_worker, g)
+    train_dataloader, test_dataloader = get_cifar_test(seed_worker, g)
     train_dataloader = test_dataloader
 
 
 class Linear_Validator:
     # -----------------------------------------------INITIALIZE TRAINING-------------------------------------------------------------
-    def __init__(self, train_loader=train_dataloader, train_val_loader=train_val_dataloader, valid_loader=test_dataloader):
+    def __init__(self, train_loader=train_dataloader, valid_loader=test_dataloader):
         self.device = model_config['device']
         self.save_dir = model_config['SAVE_DIR']
         self.batch_size = model_config['batch_size']
@@ -91,7 +91,7 @@ class Linear_Validator:
         self.logger = set_logging(self.save_dir, self.model_name)
 
         # get data loader
-        self.train_loader, self.valid_loader, self.train_val_loader = train_loader, valid_loader, train_val_loader
+        self.train_loader, self.valid_loader = train_loader, valid_loader
         self.max_stepnum = len(self.train_loader)
         self.conf["Max_iter_num"] = self.max_stepnum
 
@@ -102,20 +102,20 @@ class Linear_Validator:
         self.model = self.model.eval()
 
         self.linear_classifier = LinearClassifier(model_config["EMBEDDING_SIZE"])
-        self.linear_classifier = self.linear_classifier.to(device)
+        self.linear_classifier = self.linear_classifier.to(self.device)
 
         #--------------------------------
 
         self.logger = set_logging(self.save_dir, self.model_name)
 
-        with torch.no_grad():
-          self.model.fc.weight.data.normal_(mean= 0.0 , std= 0.01)
-          self.model.fc.bias.data.zero_()
+        # with torch.no_grad():
+        #   self.model.fc.weight.data.normal_(mean= 0.0 , std= 0.01)
+        #   self.model.fc.bias.data.zero_()
         #-------------------------------------------------
 
         self.conf = count_parameters(self.logger, self.model, self.conf)
 
-        self.optimizer, self.conf = get_optimizer(self.logger, get_params_groups(self.model), self.conf, self.resume, self.ckpt, model_config['OPTIMIZER'], lr0=model_config["LEARNING_RATE"], momentum=model_config["MOMENTUM"], weight_decay=model_config["WEIGHT_DECAY"])
+        self.optimizer, self.conf = get_optimizer(self.logger, get_params_groups(self.linear_classifier), self.conf, self.resume, self.ckpt, model_config['OPTIMIZER'], lr0=model_config["LEARNING_RATE"], momentum=model_config["MOMENTUM"], weight_decay=model_config["WEIGHT_DECAY"])
         # self.optimizer = torch.optim.SGD(get_params_groups(self.model), lr=0.06, weight_decay=5e-4, momentum=0.9)
 
         if self.resume:
@@ -126,35 +126,6 @@ class Linear_Validator:
         
     
 # -------------------"------------------------------------------------------------TRAINING PROCESS-----------------------------------------------
-    @staticmethod
-    def prepro_data(step, batch_data, device):
-        inputs, labels = batch_data
-        labels = labels.view(-1)
-        return inputs.to(device), labels.to(device)
-
-    def prepro_data_test(step, batch_data, device):
-        inputs , null_ , labels = batch_data
-        labels = labels.view(-1)
-        return inputs.to(device), labels.to(device)
-
-    # Each Train Step
-    # def train_step(self, batch_data):
-    #     inputs, labels = self.prepro_data(batch_data, self.device)
-    #     # print(inputs.size())
-    #     with torch.no_grad():
-    #         outputs = self.model(inputs)
-
-    #     outputs = self.linear_classifier(outputs)
-    #     loss = torch.nn.CrossEntropyLoss()(outputs, labels)
-
-    #     self.optimizer.zero_grad()
-    #     self.scaler.scale(loss).backward()
-    #     self.scaler.step(self.optimizer)
-    #     self.scaler.update()
-        
-    #     return loss.cpu().detach().numpy(), outputs.cpu().detach(), labels.cpu().detach()
-
-
 
     def train_step(self):
         self.model.train(False)
@@ -165,8 +136,8 @@ class Linear_Validator:
         lr = adjust_learning_rate(self.optimizer, self.epoch, model_config["LEARNING_RATE"])
 
         pbar = enumerate(self.train_loader)
-        pbar = tqdm(pbar, desc=('%20s' * 4) % ('Phase' ,'Epoch', 'Total Loss', 'Learning Rate', 'Acc@1', 'Acc@5'), total=self.max_stepnum)                        
-        self.logger.warning(('%20s' * 4) % ('Phase' ,'Epoch', 'Total Loss', 'Learning Rate', 'Acc@1', 'Acc@5'))
+        pbar = tqdm(pbar, desc=('%20s' * 6) % ('Phase' ,'Epoch', 'Total Loss', 'Learning Rate', 'Acc@1', 'Acc@5'), total=self.max_stepnum)                        
+        self.logger.warning(('%20s' * 6) % ('Phase' ,'Epoch', 'Total Loss', 'Learning Rate', 'Acc@1', 'Acc@5'))
         total_loss, total_num = 0.0, 0
         for step, (images, targets) in pbar:
             images, targets = images.cuda(non_blocking=True), targets.cuda(non_blocking=True).view(-1)
@@ -176,7 +147,7 @@ class Linear_Validator:
 
             outputs = self.linear_classifier(outputs)
 
-            loss = self.criterion(outputs, targets)
+            train_loss = self.criterion(outputs, targets)
 
             self.optimizer.zero_grad()
             train_loss.backward()
@@ -195,8 +166,8 @@ class Linear_Validator:
 
 
         acc1, acc5 = accuracy(train_predictions, train_labels, topk=(1, 5))
-        print('%20s' * 4  % ("Train", f'{self.epoch}/{self.epochs}', total_loss/total_num, lr, acc1, acc5))     
-        self.logger.warning('%20s' * 4  % ("Train", f'{self.epoch}/{self.epochs}', total_loss/total_num, lr, acc1, acc5))
+        print('%20s' * 6  % ("Train", f'{self.epoch}/{self.epochs}', total_loss/total_num, lr, acc1, acc5))     
+        self.logger.warning('%20s' * 6  % ("Train", f'{self.epoch}/{self.epochs}', total_loss/total_num, lr, acc1, acc5))
 
 
     # Each Validation Step
@@ -221,28 +192,28 @@ class Linear_Validator:
 
         # Validation Loop
         vbar = enumerate(self.valid_loader)
-        vbar = tqdm(vbar, desc=('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss', 'Acc@1', 'Acc@5'), total=len(self.valid_loader))
-        self.logger.warning(('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss', 'Acc@1', 'Acc@5'))
+        vbar = tqdm(vbar, desc=('%20s' * 5) % ('Phase' ,'Epoch', 'Total Loss', 'Acc@1', 'Acc@5'), total=len(self.valid_loader))
+        self.logger.warning(('%20s' * 5) % ('Phase' ,'Epoch', 'Total Loss', 'Acc@1', 'Acc@5'))
 
-        for step, (images, _, targets) in vbar:
+        for step, (images, targets) in vbar:
             images, targets = images.cuda(non_blocking=True), targets.cuda(non_blocking=True).view(-1)
 
             outputs = self.model(images)
             outputs = self.linear_classifier(outputs)
-            loss = self.criterion(outputs, targets)
+            val_loss = self.criterion(outputs, targets)
 
             if self.epoch != 0: 
                 self.val_losses.append(val_loss)
             
             # val_embeddings.extend(val_embeds[0])
             # val_labels.extend(val_targets)
-        validation_predictions = torch.cat([validation_predictions, predictions], dim=0)
-        validation_labels = torch.cat([validation_labels, labels], dim=0)
+        validation_predictions = torch.cat([validation_predictions, outputs.cpu().detach()], dim=0)
+        validation_labels = torch.cat([validation_labels, targets.cpu().detach()], dim=0)
 
         acc1, acc5 = accuracy(validation_predictions, validation_labels, topk=(1, 5))
 
-        print('%20s' * 3 % ("Validation", f'{self.epoch}/{self.epochs}', val_loss, acc1, acc5))
-        self.logger.warning('%20s' * 3 % ("Validation", f'{self.epoch}/{self.epochs}', val_loss, acc1, acc5))
+        print('%20s' * 5 % ("Validation", f'{self.epoch}/{self.epochs}', val_loss, acc1, acc5))
+        self.logger.warning('%20s' * 5 % ("Validation", f'{self.epoch}/{self.epochs}', val_loss, acc1, acc5))
         
         # PLot Losses
         if self.epoch != 0: self.plot_loss()
@@ -274,7 +245,14 @@ class Linear_Validator:
                     # ############################################################Train Loop
                     
                     if self.epoch != 0:
-                        self.train()
+                        initial_params = [param.clone() for param in self.model.parameters()]
+                        initial_classifier_params = [param.clone() for param in self.linear_classifier.parameters()]
+
+                        self.train_step()
+
+                        self.sanity_check(self.model.parameters(), initial_params)
+                        self.sanity_check(self.linear_classifier.parameters(), initial_classifier_params)
+
                     else : 
                         initial_params = [param.clone() for param in self.model.parameters()]
                         initial_classifier_params = [param.clone() for param in self.linear_classifier.parameters()]
@@ -304,6 +282,14 @@ class Linear_Validator:
             finish_time = time.time()
             print(f'\nTraining completed in {time.ctime(finish_time)} \nIts Done in: {(time.time() - self.start_time) / 3600:.3f} hours.') 
     # -------------------------------------------------------Training Callback after each epoch--------------------------
+    def sanity_check(self, parameters, initial_params):
+        if any((param != initial_param).any() for param, initial_param in zip(parameters, initial_params)):
+            print("=> Sanity checked : Failed. ⛔")
+        else :
+            print("=> Sanity check : Sucess 👌.")
+            
+    
+    
     def plot_loss(self, train_mean_size=1, val_mean_size=1):
         COLS=3
         ROWS=1

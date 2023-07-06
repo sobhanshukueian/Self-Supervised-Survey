@@ -42,6 +42,13 @@ test_transform = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize([0.4914, 0.4822, 0.4465], [0.2023, 0.1994, 0.2010])])
 
+train_val_transform = transforms.Compose([
+        transforms.RandomResizedCrop(32),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+    ])
+
 def get_cifar_data(seed_worker, g):
     # data prepare
     train_data = CIFAR10Pair(train=True, transform=train_transform)
@@ -55,6 +62,16 @@ def get_cifar_data(seed_worker, g):
 
     vis_dataloader = DataLoader(train_data, shuffle=True, num_workers=0, batch_size=model_config["show_batch_size"], worker_init_fn=seed_worker, generator=g)
     return train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader
+
+
+def get_cifar_test(seed_worker, g):
+    train_val_data= CIFAR10(root=root_path, train=True, transform=train_val_transform, download=True)
+    train_val_dataloader  = DataLoader(train_val_data, batch_size=model_config["batch_size"], shuffle=False, num_workers=0, pin_memory=True, worker_init_fn=seed_worker, generator=g)
+
+    test_data = CIFAR10(root=root_path, train=False, transform=train_val_transform, download=True)
+    test_dataloader = DataLoader(test_data, batch_size=model_config["batch_size"], shuffle=False, num_workers=0, pin_memory=True, drop_last=True, worker_init_fn=seed_worker, generator=g)
+
+    return train_val_dataloader, test_dataloader
 
 
 # train_features = next(iter(train_dataloader))
