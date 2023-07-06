@@ -1,4 +1,3 @@
-
 import os
 import numpy as np
 import time
@@ -10,10 +9,9 @@ from prettytable import PrettyTable
 import json
 from sklearn.metrics import auc
 from tqdm import tqdm
+from torchvision.datasets import CIFAR10
 import matplotlib
 import matplotlib.pyplot as plt
-import pandas as pd
-import csv
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 from utils.utils import CosineAnnealingWarmupRestarts, set_logging
 import random
@@ -57,7 +55,6 @@ reproducibility(3)
 g = torch.Generator()
 g.manual_seed(3)
 
-
 if model_config["dataset"] == "STL10":
     train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader = get_stl_data(seed_worker, g)
 elif model_config["dataset"] == "CIFAR10":
@@ -65,10 +62,9 @@ elif model_config["dataset"] == "CIFAR10":
 else:
     train_dataloader, train_val_dataloader, test_dataloader, vis_dataloader = get_cifar_data(seed_worker, g)
     train_dataloader = test_dataloader
-    
 
 
-class Trainer:
+class Linear_Validator:
     # -----------------------------------------------INITIALIZE TRAINING-------------------------------------------------------------
     def __init__(self, train_loader=train_dataloader, train_val_loader=train_val_dataloader, valid_loader=test_dataloader):
         self.device = model_config['device']
@@ -81,7 +77,6 @@ class Trainer:
         self.save_plots = model_config["SAVE_PLOTS"]
         # 0 == nothing || 1 == model architecture || 2 == print optimizer || 3 == model parameters
         self.train_losses=[]
-        self.train_losses_s=[]
         self.val_losses=[]
         self.val_losses_s=[]
         self.conf = {'Basic configs': model_config, 'Max_iter_num' : '', 'Epochs' : self.epochs, 'Trained_epoch' : 0, 'Optimizer' : '', 'Parameter_size' : '', "Model" : ''}
@@ -90,15 +85,8 @@ class Trainer:
         self.resume_dir = model_config["RESUME_DIR"]
         self.start_epoch = 0
 
-        # temm=0
-        # tmp_save_dir = self.save_dir
-        # while osp.exists(tmp_save_dir):
-        #     tmp_save_dir = self.save_dir
-        #     temm+=1
-        #     tmp_save_dir += (str(temm))
-        # self.save_dir = tmp_save_dir
-        # del temm
-        # print("Save Project in {} directory.".format(self.save_dir))
+        
+        # get data loader
 
         self.logger = set_logging(self.save_dir, self.model_name)
 
@@ -107,10 +95,23 @@ class Trainer:
         self.max_stepnum = len(self.train_loader)
         self.conf["Max_iter_num"] = self.max_stepnum
 
-
+        
         # get model 
         self.model, self.conf, self.ckpt = get_model(model_config["MODEL_NAME"], self.conf, self.resume, self.resume_dir, self.weights)
-        self.model = self.model.to(self.device)
+        self.model = self.model.encoder.to(self.device)
+        self.model = self.model.eval()
+
+        self.linear_classifier = LinearClassifier(model_config["EMBEDDING_SIZE"])
+        self.linear_classifier = self.linear_classifier.to(device)
+
+        #--------------------------------
+
+        self.logger = set_logging(self.save_dir, self.model_name)
+
+        with torch.no_grad():
+          self.model.fc.weight.data.normal_(mean= 0.0 , std= 0.01)
+          self.model.fc.bias.data.zero_()
+        #-------------------------------------------------
 
         self.conf = count_parameters(self.logger, self.model, self.conf)
 
@@ -120,39 +121,62 @@ class Trainer:
         if self.resume:
             self.start_epoch = self.ckpt["epoch"] + 1
             self.conf['resume'] += f" from epoch {self.start_epoch}"
+
+        self.criterion = torch.nn.CrossEntropyLoss()
         
-
-# -------------------------------------------------------------------------------TRAINING PROCESS-----------------------------------------------
+    
+# -------------------"------------------------------------------------------------TRAINING PROCESS-----------------------------------------------
     @staticmethod
-    def prepro_data(batch_data, device):
-        images1, images2, targets = batch_data
-        return images1.to(device), images2.to(device), targets
+    def prepro_data(step, batch_data, device):
+        inputs, labels = batch_data
+        labels = labels.view(-1)
+        return inputs.to(device), labels.to(device)
 
+    def prepro_data_test(step, batch_data, device):
+        inputs , null_ , labels = batch_data
+        labels = labels.view(-1)
+        return inputs.to(device), labels.to(device)
 
     # Each Train Step
-    def train_step(self, batch_data):
-        image1, image2, targets = self.prepro_data(batch_data, self.device)
+    # def train_step(self, batch_data):
+    #     inputs, labels = self.prepro_data(batch_data, self.device)
+    #     # print(inputs.size())
+    #     with torch.no_grad():
+    #         outputs = self.model(inputs)
+
+    #     outputs = self.linear_classifier(outputs)
+    #     loss = torch.nn.CrossEntropyLoss()(outputs, labels)
+
+    #     self.optimizer.zero_grad()
+    #     self.scaler.scale(loss).backward()
+    #     self.scaler.step(self.optimizer)
+    #     self.scaler.update()
         
-        preds, loss, losses = self.model(image1, image2, True)
+    #     return loss.cpu().detach().numpy(), outputs.cpu().detach(), labels.cpu().detach()
 
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
 
-        return loss.item(), [loss.item() for loss in losses]
 
-    def train(self):
-        self.model.train()
+    def train_step(self):
+        self.model.train(False)
+        self.linear_classifier.train(True)
+
+        train_predictions = torch.tensor([])
+        train_labels = torch.tensor([])
         lr = adjust_learning_rate(self.optimizer, self.epoch, model_config["LEARNING_RATE"])
 
         pbar = enumerate(self.train_loader)
-        pbar = tqdm(pbar, desc=('%20s' * 4) % ('Phase' ,'Epoch', 'Total Loss', 'Learning Rate'), total=self.max_stepnum)                        
-        self.logger.warning(('%20s' * 4) % ('Phase' ,'Epoch', 'Total Loss', 'Learning Rate'))
+        pbar = tqdm(pbar, desc=('%20s' * 4) % ('Phase' ,'Epoch', 'Total Loss', 'Learning Rate', 'Acc@1', 'Acc@5'), total=self.max_stepnum)                        
+        self.logger.warning(('%20s' * 4) % ('Phase' ,'Epoch', 'Total Loss', 'Learning Rate', 'Acc@1', 'Acc@5'))
         total_loss, total_num = 0.0, 0
-        for step, (im_1, im_2, _) in pbar:
-            im_1, im_2 = im_1.cuda(non_blocking=True), im_2.cuda(non_blocking=True)
+        for step, (images, targets) in pbar:
+            images, targets = images.cuda(non_blocking=True), targets.cuda(non_blocking=True).view(-1)
 
-            preds, train_loss, train_losses = self.model(im_1, im_2, True)
+            with torch.no_grad():
+                outputs = self.model(images)
+
+            outputs = self.linear_classifier(outputs)
+
+            loss = self.criterion(outputs, targets)
 
             self.optimizer.zero_grad()
             train_loss.backward()
@@ -161,74 +185,76 @@ class Trainer:
             total_num += self.train_loader.batch_size
             total_loss += train_loss.item() * self.train_loader.batch_size
 
+            train_predictions = torch.cat([train_predictions, outputs.cpu().detach()], dim=0)
+            train_labels = torch.cat([train_labels, targets.cpu().detach()], dim=0)
+
             if self.epoch != 0: 
                 self.train_losses.append(total_loss/total_num)
-                self.train_losses_s.append([loss.item() for loss in train_losses])
 
             pbar.set_postfix({'loss':total_loss/total_num})
-            
-        print('%20s' * 4  % ("Train", f'{self.epoch}/{self.epochs}', total_loss/total_num, lr))     
-        self.logger.warning('%20s' * 4  % ("Train", f'{self.epoch}/{self.epochs}', total_loss/total_num, lr))
+
+
+        acc1, acc5 = accuracy(train_predictions, train_labels, topk=(1, 5))
+        print('%20s' * 4  % ("Train", f'{self.epoch}/{self.epochs}', total_loss/total_num, lr, acc1, acc5))     
+        self.logger.warning('%20s' * 4  % ("Train", f'{self.epoch}/{self.epochs}', total_loss/total_num, lr, acc1, acc5))
 
 
     # Each Validation Step
     def val_step(self, batch_data):
-        image1, image2, targets = self.prepro_data(batch_data, self.device)
-        preds, loss, losses = self.model(image1, image2, False)
-        return loss.item(), [pred.cpu().detach().numpy() for pred in preds], targets, [loss.item() for loss in losses]
+        self.linear_classifier.eval()
+        inputs_, labels_ = self.prepro_data_test(batch_data, self.device)
+        outputs = self.model(inputs_)
+        outputs = self.linear_classifier(outputs)
+        loss = torch.nn.CrossEntropyLoss()(outputs, labels_)
+
+        return loss.cpu().detach().numpy(), outputs.cpu().detach(), labels_.cpu().detach()
 
     def validation(self):
-        self.model.eval()
+        self.linear_classifier.eval()
 
-        val_labels = []
-        val_embeddings = []
+        # val_labels = []
+        # val_embeddings = []
+
+        validation_predictions = torch.tensor([])
+        validation_labels = torch.tensor([])
+
 
         # Validation Loop
         vbar = enumerate(self.valid_loader)
-        vbar = tqdm(vbar, desc=('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss'), total=len(self.valid_loader))
-        self.logger.warning(('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss'))
+        vbar = tqdm(vbar, desc=('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss', 'Acc@1', 'Acc@5'), total=len(self.valid_loader))
+        self.logger.warning(('%20s' * 3) % ('Phase' ,'Epoch', 'Total Loss', 'Acc@1', 'Acc@5'))
 
-        for step, batch_data in vbar:
-            val_loss, val_embeds, val_targets, val_losses = self.val_step(batch_data)
+        for step, (images, _, targets) in vbar:
+            images, targets = images.cuda(non_blocking=True), targets.cuda(non_blocking=True).view(-1)
+
+            outputs = self.model(images)
+            outputs = self.linear_classifier(outputs)
+            loss = self.criterion(outputs, targets)
+
             if self.epoch != 0: 
                 self.val_losses.append(val_loss)
-                self.val_losses_s.append(val_losses)
-            val_embeddings.extend(val_embeds[0])
-            val_labels.extend(val_targets)
-        print('%20s' * 3 % ("Validation", f'{self.epoch}/{self.epochs}', val_loss))
-        self.logger.warning('%20s' * 3 % ("Validation", f'{self.epoch}/{self.epochs}', val_loss))
+            
+            # val_embeddings.extend(val_embeds[0])
+            # val_labels.extend(val_targets)
+        validation_predictions = torch.cat([validation_predictions, predictions], dim=0)
+        validation_labels = torch.cat([validation_labels, labels], dim=0)
+
+        acc1, acc5 = accuracy(validation_predictions, validation_labels, topk=(1, 5))
+
+        print('%20s' * 3 % ("Validation", f'{self.epoch}/{self.epochs}', val_loss, acc1, acc5))
+        self.logger.warning('%20s' * 3 % ("Validation", f'{self.epoch}/{self.epochs}', val_loss, acc1, acc5))
         
         # PLot Losses
         if self.epoch != 0: self.plot_loss()
         # PLot Embeddings
-        plot_embeddings(self.epoch, np.array(val_embeddings), np.array(val_labels), 0)
-
-    def knn_eval(self):
-        validation_model = deepcopy(self.model.encoder)
-        # if validation_model.fc : 
-        #     validation_model.fc = nn.Identity()
-        knn_acc = knn_monitor(self.logger, validation_model, self.train_val_loader, self.valid_loader, self.epoch, k=200, hide_progress=False)
-
-        filename = self.save_dir + "/KNN.csv"
-        
-        file_exists = os.path.isfile(filename)
-
-        # Open the CSV file in append mode
-        with open(filename, 'a', newline='') as file:
-            writer = csv.writer(file)
-
-            # If the file doesn't exist or doesn't contain the header row, add it
-            if not file_exists or 'epoch,KNN_acc' not in open(filename).read():
-                writer.writerow(['epoch', 'KNN_acc'])
-
-            # Write a new row with epoch and KNN_acc values
-            writer.writerow([self.epoch, knn_acc])
+        # plot_embeddings(self.epoch, np.array(val_embeddings), np.array(val_labels), 0)
 
 
     # Training Process
     def run(self):
         try:
             torch.cuda.empty_cache()
+
             # training process prerequisite
             self.start_time = time.time()
             self.conf["Time"] = time.ctime(self.start_time)
@@ -240,15 +266,20 @@ class Trainer:
                 try:
                     self.conf["Trained_epoch"] = self.epoch
 
+
+
+                    validation_predictions = torch.tensor([])
+                    validation_labels = torch.tensor([])
+
                     # ############################################################Train Loop
+                    
                     if self.epoch != 0:
                         self.train()
                     else : 
                         initial_params = [param.clone() for param in self.model.parameters()]
+                        initial_classifier_params = [param.clone() for param in self.linear_classifier.parameters()]
 
-                    self.knn_eval()
-
-                    # ###########################################################Validation Loop
+                    # ############################################################Validation Loop
 
                     if self.epoch % model_config['VALIDATION_FREQ'] == 0 : 
                         print("--------------------------")
@@ -257,76 +288,41 @@ class Trainer:
 
                     if self.epoch == 0:
                         self.sanity_check(self.model.parameters(), initial_params)
+                        self.sanity_check(self.linear_classifier.parameters(), initial_classifier_params)
+
                         
-                    save(conf=self.conf, save_dir=self.save_dir, model_name=self.model_name, model=self.model, epoch=self.epoch, optimizer=self.optimizer)
+                    save(conf=self.conf, save_dir=self.save_dir, model_name=self.model_name, model=self.linear_classifier, epoch=self.epoch, optimizer=self.optimizer)
          
                 except Exception as _:
                     print('ERROR in training steps.')
                     raise
-
+ 
         except Exception as _:
             print('ERROR in training loop or eval/save model.')
             raise
         finally:
             finish_time = time.time()
             print(f'\nTraining completed in {time.ctime(finish_time)} \nIts Done in: {(time.time() - self.start_time) / 3600:.3f} hours.') 
-
-
-
     # -------------------------------------------------------Training Callback after each epoch--------------------------
-
-    def sanity_check(self, parameters, initial_params):
-        if any((param != initial_param).any() for param, initial_param in zip(parameters, initial_params)):
-            print("=> Sanity checked : Failed. ⛔")
-        else :
-            print("=> Sanity check : Sucess 👌.")
-            
-
-
     def plot_loss(self, train_mean_size=1, val_mean_size=1):
-        FIRST_ = "Contrastive Loss1"
-        SECOND_ = "Contrastive Loss2"
-        THIRD_ = "ISOKLD LOSS"
-
-        COLS=5
-        ROWS=2
+        COLS=3
+        ROWS=1
         LINE_WIDTH = 2
         fig, ax = plt.subplots(ROWS, COLS, figsize=(COLS*10, ROWS*10))
         fig.suptitle("Losses Plot", fontsize=16)
 
         # train_mean_size = self.max_stepnum/self.batch_size
-        ax[0, 0].plot(np.array(self.train_losses),  label="Training loss", linewidth=LINE_WIDTH+1)
-        ax[0, 1].plot(np.array(self.train_losses_s)[:, 0], 'b--',  label=FIRST_, linewidth=LINE_WIDTH-1)
-        ax[0, 2].plot(np.array(self.train_losses_s)[:, 1], 'g--',  label=SECOND_, linewidth=LINE_WIDTH-1)
-        ax[0, 3].plot(np.array(self.train_losses_s)[:, 2], 'r--',  label=THIRD_, linewidth=LINE_WIDTH-1)
+        ax[0].plot(np.arange(len(self.train_losses) / train_mean_size), np.mean(np.array(self.train_losses).reshape(-1, train_mean_size), axis=1), 'r',  label="training loss", linewidth=LINE_WIDTH)
+        ax[0].set_title("Training Loss")
 
-        ax[0, 4].plot(np.array(self.train_losses),  label="Training loss", linewidth=LINE_WIDTH+1)
-        ax[0, 4].plot(np.array(self.train_losses_s)[:, 0], 'b--',  label=FIRST_, linewidth=LINE_WIDTH-1)
-        ax[0, 4].plot(np.array(self.train_losses_s)[:, 1], 'g--',  label=SECOND_, linewidth=LINE_WIDTH-1)
-        ax[0, 4].plot(np.array(self.train_losses_s)[:, 2], 'r--',  label=THIRD_, linewidth=LINE_WIDTH-1)
+        val_mean_size = len(self.valid_loader)
+        ax[1].plot(np.arange(len(self.val_losses) / val_mean_size), np.mean(np.array(self.val_losses).reshape(-1, val_mean_size), axis=1), 'g',  label="validation loss", linewidth=LINE_WIDTH)
+        ax[1].set_title("Validation Loss")
 
-        ax[0, 0].set_title("Train Loss")
-        ax[0, 1].set_title(FIRST_)
-        ax[0, 2].set_title(SECOND_)
-        ax[0, 3].set_title(THIRD_)
-        ax[0, 4].legend()
-
-        # val_mean_size = len(self.valid_loader)
-        ax[1, 0].plot(np.array(self.val_losses),  label="Validation loss", linewidth=LINE_WIDTH+1)
-        ax[1, 1].plot(np.array(self.val_losses_s)[:, 0], 'b--',  label=FIRST_, linewidth=LINE_WIDTH-1)
-        ax[1, 2].plot(np.array(self.val_losses_s)[:, 1], 'g--',  label=SECOND_, linewidth=LINE_WIDTH-1)
-        ax[1, 3].plot(np.array(self.val_losses_s)[:, 2], 'r--',  label=THIRD_, linewidth=LINE_WIDTH-1)
-
-        ax[1, 4].plot(np.array(self.val_losses),  label="Validation loss", linewidth=LINE_WIDTH+1)
-        ax[1, 4].plot(np.array(self.val_losses_s)[:, 0], 'b--',  label=FIRST_, linewidth=LINE_WIDTH-1)
-        ax[1, 4].plot(np.array(self.val_losses_s)[:, 1], 'g--',  label=SECOND_, linewidth=LINE_WIDTH-1)
-        ax[1, 4].plot(np.array(self.val_losses_s)[:, 2], 'r--',  label=THIRD_, linewidth=LINE_WIDTH-1)
-        
-        ax[1, 0].set_title("Train Loss")
-        ax[1, 1].set_title(FIRST_)
-        ax[1, 2].set_title(SECOND_)
-        ax[1, 3].set_title(THIRD_)
-        ax[1, 4].legend()
+        train_mean_size = self.max_stepnum
+        ax[2].plot(np.arange(len(self.train_losses) / train_mean_size), np.mean(np.array(self.train_losses).reshape(-1, train_mean_size), axis=1), 'r',  label="training loss", linewidth=LINE_WIDTH)
+        ax[2].plot(np.arange(len(self.val_losses) / val_mean_size), np.mean(np.array(self.val_losses).reshape(-1, val_mean_size), axis=1), 'g',  label="validation loss", linewidth=LINE_WIDTH)
+        ax[2].set_title("Train Validation Loss")
 
         if self.save_plots:
             save_plot_dir = osp.join(self.save_dir, 'plots') 
@@ -335,3 +331,7 @@ class Trainer:
             plt.savefig("{}/epoch-{}-loss-plot.png".format(save_plot_dir, self.epoch)) 
         if self.visualize_plots:
             plt.show()
+
+
+if __name__ == '__main__':
+    Linear_Validator().run()

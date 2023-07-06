@@ -5,3 +5,6 @@ mocooo
 aa*
 __pycache__
 */__pycache__
+moco_var
+models/__pycache__
+utils/__pycache__
