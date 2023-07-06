@@ -2,5 +2,6 @@ runs
 moco
 mocoo
 mocooo
-aa.py
+aa*
 __pycache__
+*/__pycache__
