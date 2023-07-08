@@ -98,7 +98,7 @@ class Linear_Validator:
         
         # get model 
         self.model, self.conf, self.ckpt = get_model(model_config["MODEL_NAME"], self.conf, self.resume, self.resume_dir, self.weights)
-        self.model = self.model.encoder.to(self.device)
+        self.model = self.model.encoder_q.to(self.device)
         self.model = self.model.eval()
 
         self.linear_classifier = LinearClassifier(model_config["EMBEDDING_SIZE"])
@@ -164,21 +164,14 @@ class Linear_Validator:
 
             pbar.set_postfix({'loss':total_loss/total_num})
 
+            # del train_predictions
+            # del train_labels
+
 
         acc1, acc5 = accuracy(train_predictions, train_labels, topk=(1, 5))
         print('%20s' * 6  % ("Train", f'{self.epoch}/{self.epochs}', total_loss/total_num, lr, acc1, acc5))     
         self.logger.warning('%20s' * 6  % ("Train", f'{self.epoch}/{self.epochs}', total_loss/total_num, lr, acc1, acc5))
-
-
-    # Each Validation Step
-    def val_step(self, batch_data):
-        self.linear_classifier.eval()
-        inputs_, labels_ = self.prepro_data_test(batch_data, self.device)
-        outputs = self.model(inputs_)
-        outputs = self.linear_classifier(outputs)
-        loss = torch.nn.CrossEntropyLoss()(outputs, labels_)
-
-        return loss.cpu().detach().numpy(), outputs.cpu().detach(), labels_.cpu().detach()
+    
 
     def validation(self):
         self.linear_classifier.eval()
@@ -202,8 +195,8 @@ class Linear_Validator:
             outputs = self.linear_classifier(outputs)
             val_loss = self.criterion(outputs, targets)
 
-            if self.epoch != 0: 
-                self.val_losses.append(val_loss)
+            # if self.epoch != 0: 
+            #     self.val_losses.append(val_loss)
             
             # val_embeddings.extend(val_embeds[0])
             # val_labels.extend(val_targets)
@@ -214,9 +207,12 @@ class Linear_Validator:
 
         print('%20s' * 5 % ("Validation", f'{self.epoch}/{self.epochs}', val_loss, acc1, acc5))
         self.logger.warning('%20s' * 5 % ("Validation", f'{self.epoch}/{self.epochs}', val_loss, acc1, acc5))
+
+        # del validation_predictions
+        # del validation_labels
         
         # PLot Losses
-        if self.epoch != 0: self.plot_loss()
+        # if self.epoch != 0: self.plot_loss()
         # PLot Embeddings
         # plot_embeddings(self.epoch, np.array(val_embeddings), np.array(val_labels), 0)
 
@@ -231,7 +227,7 @@ class Linear_Validator:
             self.conf["Time"] = time.ctime(self.start_time)
             print('Start Training Process \nTime: {}'.format(time.ctime(self.start_time)))
             self.logger.warning('Start Training Process \nTime: {}'.format(time.ctime(self.start_time)))
-
+            print(torch.cuda.memory_allocated())
             # Epoch Loop
             for self.epoch in range(self.start_epoch, self.epochs+1):
                 try:
@@ -253,6 +249,9 @@ class Linear_Validator:
                         self.sanity_check(self.model.parameters(), initial_params)
                         self.sanity_check(self.linear_classifier.parameters(), initial_classifier_params)
 
+                        # del initial_classifier_params
+                        # del initial_params
+
                     else : 
                         initial_params = [param.clone() for param in self.model.parameters()]
                         initial_classifier_params = [param.clone() for param in self.linear_classifier.parameters()]
@@ -267,6 +266,9 @@ class Linear_Validator:
                     if self.epoch == 0:
                         self.sanity_check(self.model.parameters(), initial_params)
                         self.sanity_check(self.linear_classifier.parameters(), initial_classifier_params)
+
+                        # del initial_classifier_params
+                        # del initial_params
 
                         
                     save(conf=self.conf, save_dir=self.save_dir, model_name=self.model_name, model=self.linear_classifier, epoch=self.epoch, optimizer=self.optimizer)

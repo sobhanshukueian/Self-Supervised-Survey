@@ -26,13 +26,13 @@ class MOCO_VAR_MODEL(nn.Module):
         self.T = T
 
         # create the encoders
-        self.encoder = ModelBase(feature_dim=model_config["EMBEDDING_SIZE"], arch=arch)
+        self.encoder_q = ModelBase(feature_dim=model_config["EMBEDDING_SIZE"], arch=arch)
         self.encoder_k = ModelBase(feature_dim=model_config["EMBEDDING_SIZE"], arch=arch)
 
         self.encoder_q_gaussian = GaussianProjection()
         self.encoder_k_gaussian = GaussianProjection()
 
-        for param_q, param_k in zip(self.encoder.parameters(), self.encoder_k.parameters()):
+        for param_q, param_k in zip(self.encoder_q.parameters(), self.encoder_k.parameters()):
             param_k.data.copy_(param_q.data)  # initialize
             param_k.requires_grad = False  # not update by gradient
         
@@ -51,7 +51,7 @@ class MOCO_VAR_MODEL(nn.Module):
         """
         Momentum update of the key encoder
         """
-        for param_q, param_k in zip(self.encoder.parameters(), self.encoder_k.parameters()):
+        for param_q, param_k in zip(self.encoder_q.parameters(), self.encoder_k.parameters()):
             param_k.data = param_k.data * self.m + param_q.data * (1. - self.m)
 
         for param_q, param_k in zip(self.encoder_q_gaussian.parameters(), self.encoder_k_gaussian.parameters()):
@@ -96,7 +96,7 @@ class MOCO_VAR_MODEL(nn.Module):
     def disentangled_contrastive_loss(self, im_q, im_k):
         # compute query features
         # print(self.encoder_q(im_q).size())
-        q = self.encoder(im_q)
+        q = self.encoder_q(im_q)
         q = nn.functional.normalize(q, dim=1)  # already normalized
 
         q_mean, q_var = self.encoder_q_gaussian(q)
