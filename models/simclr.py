@@ -32,20 +32,17 @@ class SimCLR_MODEL(nn.Module):
 
         self.projector = MLP(dim, dim)
 
-    def contrastive_loss(x, t=0.5):
-        x = F.normalize(x, dim=1)
-        x_scores =  (x @ x.t()).clamp(min=1e-7)  # normalized cosine similarity scores
-        x_scale = x_scores / t   # scale with temperature
+    def contrastive_loss(p1, p2):
+        mean = torch.cat([p1, p2], dim=0)
+        cos_sim = F.cosine_similarity(mean[:,None,:], mean[None,:,:], dim=-1)
+        self_mask = torch.eye(cos_sim.shape[0], dtype=torch.bool, device=cos_sim.device)
+        cos_sim.masked_fill_(self_mask, -9e15)
+        pos_mask = self_mask.roll(shifts=cos_sim.shape[0]//2, dims=0)
+        cos_sim = cos_sim #/ self.hparams.temperature
+        nll = -cos_sim[pos_mask] + torch.logsumexp(cos_sim, dim=-1)
+        loss = nll.mean()
 
-        # (2N-1)-way softmax without the score of i-th entry itself.
-        # Set the diagonals to be large negative values, which become zeros after softmax.
-        x_scale = x_scale - torch.eye(x_scale.size(0)).to(x_scale.device) * 1e5
-
-        # targets 2N elements.
-        targets = torch.arange(x.size()[0])
-        targets[::2] += 1  # target of 2k element is 2k+1
-        targets[1::2] -= 1  # target of 2k+1 element is 2k
-        return F.cross_entropy(x_scale, targets.long().to(x_scale.device))
+        return loss
 
     def forward(self, x1, x2, train=False):
         """
@@ -62,8 +59,8 @@ class SimCLR_MODEL(nn.Module):
         z2 = self.encoder(x2) # NxC
 
         p1 = self.predictor(z1) # NxC
-        p2 = self.projector(z) # NxC
+        p2 = self.projector(z2) # NxC
 
-        loss = self.contrastive_loss(p)
+        loss = self.contrastive_loss(p1, p2)
 
         return (z1, p1), loss, [loss, loss, loss]
