@@ -171,7 +171,7 @@ class Linear_Validator:
         acc1, acc5 = accuracy(train_predictions, train_labels, topk=(1, 5))
         print('%20s' * 6  % ("Train", f'{self.epoch}/{self.epochs}', total_loss/total_num, lr, acc1, acc5))     
         self.logger.warning('%20s' * 6  % ("Train", f'{self.epoch}/{self.epochs}', total_loss/total_num, lr, acc1, acc5))
-    
+        return acc1, acc5
 
     def validation(self):
         self.linear_classifier.eval()
@@ -207,7 +207,7 @@ class Linear_Validator:
 
         print('%20s' * 5 % ("Validation", f'{self.epoch}/{self.epochs}', val_loss, acc1, acc5))
         self.logger.warning('%20s' * 5 % ("Validation", f'{self.epoch}/{self.epochs}', val_loss, acc1, acc5))
-
+        return acc1, acc5
         # del validation_predictions
         # del validation_labels
         
@@ -228,12 +228,25 @@ class Linear_Validator:
             print('Start Training Process \nTime: {}'.format(time.ctime(self.start_time)))
             self.logger.warning('Start Training Process \nTime: {}'.format(time.ctime(self.start_time)))
             print(torch.cuda.memory_allocated())
+            
+            filename = self.save_dir + "/Linear.csv"
+            file_exists = os.path.isfile(filename)
+            # Open the CSV file in append mode
+            with open(filename, 'a', newline='') as file:
+                writer = csv.writer(file)
+
+                # If the file doesn't exist or doesn't contain the header row, add it
+                if not os.path.isfile(filename) or 'epoch, train_acc@1, train_acc@5, validation_acc@1, validation_acc@5' not in open(filename).read():
+                    writer.writerow(['epoch', 'train_acc@1', 'train_acc@5', 'validation_acc@1', 'validation_acc@5'])
+
+            
             # Epoch Loop
+
             for self.epoch in range(self.start_epoch, self.epochs+1):
                 try:
                     self.conf["Trained_epoch"] = self.epoch
 
-
+                    train_acc1, train_acc5, valid_acc1, valid_acc5 = 0,0,0,0
 
                     validation_predictions = torch.tensor([])
                     validation_labels = torch.tensor([])
@@ -244,7 +257,7 @@ class Linear_Validator:
                         initial_params = [param.clone() for param in self.model.parameters()]
                         initial_classifier_params = [param.clone() for param in self.linear_classifier.parameters()]
 
-                        self.train_step()
+                        train_acc1, train_acc5 = self.train_step()
 
                         self.sanity_check(self.model.parameters(), initial_params)
                         self.sanity_check(self.linear_classifier.parameters(), initial_classifier_params)
@@ -260,7 +273,7 @@ class Linear_Validator:
 
                     if self.epoch % model_config['VALIDATION_FREQ'] == 0 : 
                         print("--------------------------")
-                        self.validation()
+                        valid_acc1, valid_acc5 = self.validation()
                         print("--------------------------")
 
                     if self.epoch == 0:
@@ -269,6 +282,9 @@ class Linear_Validator:
 
                         # del initial_classifier_params
                         # del initial_params
+
+                    with open(filename, 'a', newline='') as file:
+                        writer.writerow([self.epoch, train_acc1, train_acc5, valid_acc1, valid_acc5])
 
                         
                     save(conf=self.conf, save_dir=self.save_dir, model_name=self.model_name, model=self.linear_classifier, epoch=self.epoch, optimizer=self.optimizer)
@@ -322,4 +338,14 @@ class Linear_Validator:
 
 
 if __name__ == '__main__':
+    
+    tmp_save_dir = model_config["SAVE_DIR"]
+    temm = 0
+
+    while os.path.exists(tmp_save_dir):
+        temm += 1
+        tmp_save_dir = f"{model_config['SAVE_DIR']}{temm}"
+
+    model_config["SAVE_DIR"] = tmp_save_dir
+    print("Save Project in {} directory.".format(model_config["SAVE_DIR"]))
     Linear_Validator().run()

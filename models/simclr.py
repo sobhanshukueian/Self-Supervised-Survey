@@ -25,14 +25,14 @@ class SimCLR_MODEL(nn.Module):
         dim: feature dimension (default: 2048)
         arch: Backbone architecture
         """
-        super(SimSiam_MODEL, self).__init__()
+        super(SimCLR_MODEL, self).__init__()
 
         # create the encoder
-        self.backbone = ModelBase(feature_dim=dim, arch=arch)
+        self.encoder = ModelBase(feature_dim=dim, arch=arch)
 
         self.projector = MLP(dim, dim)
 
-    def contrastive_loss(p1, p2):
+    def contrastive_loss(self, p1, p2):
         mean = torch.cat([p1, p2], dim=0)
         cos_sim = F.cosine_similarity(mean[:,None,:], mean[None,:,:], dim=-1)
         self_mask = torch.eye(cos_sim.shape[0], dtype=torch.bool, device=cos_sim.device)
@@ -58,7 +58,7 @@ class SimCLR_MODEL(nn.Module):
         z1 = self.encoder(x1) # NxC
         z2 = self.encoder(x2) # NxC
 
-        p1 = self.predictor(z1) # NxC
+        p1 = self.projector(z1) # NxC
         p2 = self.projector(z2) # NxC
 
         loss = self.contrastive_loss(p1, p2)
