@@ -116,7 +116,7 @@ class Linear_Validator:
 
         self.conf = count_parameters(self.logger, self.model, self.conf)
 
-        self.optimizer, self.conf = get_optimizer(self.logger, self.linear_classifier, self.conf, self.resume, self.ckpt, model_config['OPTIMIZER'], lr0=model_config["LEARNING_RATE"], momentum=model_config["MOMENTUM"], weight_decay=model_config["WEIGHT_DECAY"])
+        self.optimizer, self.conf = get_optimizer(self.logger, get_params_groups(self.linear_classifier), self.conf, self.resume, self.ckpt, model_config['OPTIMIZER'], lr0=model_config["LEARNING_RATE"], momentum=model_config["MOMENTUM"], weight_decay=model_config["WEIGHT_DECAY"])
         # self.optimizer = torch.optim.SGD(get_params_groups(self.model), lr=0.06, weight_decay=5e-4, momentum=0.9)
 
         if self.resume:
@@ -285,6 +285,7 @@ class Linear_Validator:
                         # del initial_params
 
                     with open(filename, 'a', newline='') as file:
+                        writer = csv.writer(file)
                         writer.writerow([self.epoch, train_acc1, train_acc5, valid_acc1, valid_acc5])
 
                         
