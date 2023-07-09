@@ -12,6 +12,7 @@ import torch.nn.init as init
 from configs import model_config
 from models.layers import ModelBase
 from models.layers import MLP
+from models.variation import GaussianProjection
 import copy
 
 
