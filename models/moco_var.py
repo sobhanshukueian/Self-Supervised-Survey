@@ -116,7 +116,7 @@ class MOCO_VAR_MODEL(nn.Module):
             k_mean, k_var = self.encoder_k_gaussian(k)
 
 
-        mean = torch.cat([q_mean, k_mean.detach()], dim=0)
+        mean = torch.cat([q_mean, k_mean], dim=0)
         cos_sim = F.cosine_similarity(mean[:,None,:], mean[None,:,:], dim=-1)
         self_mask = torch.eye(cos_sim.shape[0], dtype=torch.bool, device=cos_sim.device)
         cos_sim.masked_fill_(self_mask, -9e15)
@@ -164,7 +164,7 @@ class MOCO_VAR_MODEL(nn.Module):
         loss_12, q1, k2, iso_kl_loss1, loss_gaussian1 = self.disentangled_contrastive_loss(im1, im2)
         loss_21, q2, k1, iso_kl_loss2, loss_gaussian2 = self.disentangled_contrastive_loss(im2, im1)
 
-        loss_gaussian_total = loss_gaussian1+loss_gaussian2
+        loss_gaussian_total = loss_gaussian1 + loss_gaussian2
 
         iso_kl_loss1 *= 0.001
         iso_kl_loss2 *= 0.001
