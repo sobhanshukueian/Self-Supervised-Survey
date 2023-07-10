@@ -99,7 +99,7 @@ class Linear_Validator:
         
         # get model 
         self.model, self.conf, self.ckpt = get_model(model_config["MODEL_NAME"], self.conf, self.resume, self.resume_dir, self.weights)
-        self.model = self.model.encoder_q.to(self.device)
+        self.model = self.model.encoder.to(self.device)
         self.model = self.model.eval()
 
         self.linear_classifier = LinearClassifier(model_config["EMBEDDING_SIZE"])
