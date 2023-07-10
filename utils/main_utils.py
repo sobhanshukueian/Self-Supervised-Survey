@@ -75,7 +75,7 @@ def get_model(name, conf, resume, save_dir="./", weights=None, device='cpu'):
         model = MOCO_MODEL()
     elif name == "MOCO_VAR":
         model = MOCO_VAR_MODEL()
-    elif name == "MOCO_DVAR_MODEL":
+    elif name == "MOCO_DVAR":
         model = MOCO_DVAR_MODEL()
     elif name == "SimSiam":
         model = SimSiam_MODEL()
