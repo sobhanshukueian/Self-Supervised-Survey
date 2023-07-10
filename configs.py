@@ -9,22 +9,22 @@ model_config = dict(
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu',
     SAVE_PLOTS = True,
     VISUALIZE_PLOTS = False,
-    SAVE_DIR = "./simsiam",
-    MODEL_NAME = "SimSiam",
+    SAVE_DIR = "./moco_var",
+    MODEL_NAME = "MOCO_VAR",
     WEIGHTS = None,
-    OPTIMIZER = "SGD",
+    OPTIMIZER = "AdamW",
     VALIDATION_FREQ = 3,
     HIDDEN_SIZE = 4096,
     EMBEDDING_SIZE = 128,
     PROJECTION_SIZE = 128,
-    RESUME = False,
-    RESUME_DIR= "/kaggle/input/self-supervised-survey-simsiam/Self-Supervised-Survey/moco_var/weights",
+    RESUME = True,
+    RESUME_DIR= "/kaggle/input/self-supervised-learning-moco-var/Self-Supervised-Survey/moco_var/weights",
     MOMENTUM=0.9,
-    LEARNING_RATE=0.06,
+    LEARNING_RATE=0.002,
     WEIGHT_DECAY = 5e-4,
     WARM_UP = 0,
     dataset = "CIFAR10",
-    Description = "SimSiam Implementation "
+    Description = "MOCO_VAR Implementation "
 )
 
 # Linear Evaluation Config
