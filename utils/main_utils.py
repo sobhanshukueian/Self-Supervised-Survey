@@ -17,6 +17,7 @@ from utils.utils import LARS
 from configs import model_config
 from models.moco import MOCO_MODEL
 from models.moco_var import MOCO_VAR_MODEL
+from models.moco_var_detached import MOCO_DVAR_MODEL
 from models.simsiam import SimSiam_MODEL
 from models.simsiam_var import SimSiam_VAR_MODEL
 from models.simclr import SimCLR_MODEL
@@ -74,6 +75,8 @@ def get_model(name, conf, resume, save_dir="./", weights=None, device='cpu'):
         model = MOCO_MODEL()
     elif name == "MOCO_VAR":
         model = MOCO_VAR_MODEL()
+    elif name == "MOCO_DVAR_MODEL":
+        model = MOCO_DVAR_MODEL()
     elif name == "SimSiam":
         model = SimSiam_MODEL()
     elif name == "SimSiam_VAR":
