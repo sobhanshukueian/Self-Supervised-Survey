@@ -17,14 +17,14 @@ model_config = dict(
     HIDDEN_SIZE = 4096,
     EMBEDDING_SIZE = 128,
     PROJECTION_SIZE = 128,
-    RESUME = True,
+    RESUME = False,
     RESUME_DIR= "/kaggle/input/self-supervised-learning-moco-var/Self-Supervised-Survey/moco_var/weights",
     MOMENTUM=0.9,
     LEARNING_RATE=0.002,
     WEIGHT_DECAY = 5e-4,
     WARM_UP = 0,
     dataset = "CIFAR10",
-    backbone = "resnet18",
+    Backbone = "resnet18",
     Description = "MOCO_VAR Implementation "
 )
 
