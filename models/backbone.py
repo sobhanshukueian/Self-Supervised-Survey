@@ -176,9 +176,9 @@ class MyBackbone(nn.Module):
         self.online.head = Head()
         
         # embedding_size = model_config["EMBEDDING_SIZE"]
-        self.ss1 = Conv2D(in_ch=512, out_ch=32, kernel=2, stride=1, padding=0)
-        self.ss0 = Conv2D(in_ch=256, out_ch=32, kernel=4, stride=1, padding=0)
-        self.ss2 = Conv2D(in_ch=512, out_ch=64, kernel=1, stride=1, padding=0)
+        self.ss1 = Conv2D(in_ch=512, out_ch=32, kernel=2 * 3, stride=1, padding=0)
+        self.ss0 = Conv2D(in_ch=256, out_ch=32, kernel=4 * 3, stride=1, padding=0)
+        self.ss2 = Conv2D(in_ch=512, out_ch=64, kernel=1 * 3, stride=1, padding=0)
 
     def forward(self, x1, x2=None, return_embedding=False):
         x1 = self.online(x1)

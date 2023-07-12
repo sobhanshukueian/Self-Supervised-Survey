@@ -10,6 +10,9 @@ from configs import model_config
 
 root_path = "D:\Ai\Projects\self-supervised-learning\data"
 
+normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225])
+
 class STL10Pair(Dataset):
     def __init__(self, transform, train):
         self.transform = transform
@@ -35,13 +38,23 @@ train_transform = transforms.Compose([
     transforms.RandomApply([transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8),
     transforms.RandomGrayscale(p=0.2),
     transforms.ToTensor(),
-    transforms.Normalize([0.4914, 0.4822, 0.4465], [0.2023, 0.1994, 0.2010])
+    normalize
     # random_mask(output_size=96, mask_size=8, p=0.8)
     ])
 
 test_transform = transforms.Compose([
+    transforms.Resize(96),
     transforms.ToTensor(),
-    transforms.Normalize([0.4914, 0.4822, 0.4465], [0.2023, 0.1994, 0.2010])])
+    normalize])
+
+
+train_val_transform = transforms.Compose([
+    transforms.RandomResizedCrop(96),
+    transforms.RandomHorizontalFlip(),
+    transforms.ToTensor(),
+    normalize
+])
+
 
 # data prepare
 
