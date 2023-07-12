@@ -14,6 +14,7 @@ import torchvision.models as torchvision_models
 from configs import model_config
 from models.variation import GaussianProjection
 from models.layers import ModelBase
+from models.backbone import MyBackbone
 import copy
 
 
@@ -25,9 +26,14 @@ class MOCO_VAR_MODEL(nn.Module):
         self.m = m
         self.T = T
 
-        # create the encoders
-        self.encoder = ModelBase(feature_dim=model_config["EMBEDDING_SIZE"], arch=arch)
-        self.encoder_k = ModelBase(feature_dim=model_config["EMBEDDING_SIZE"], arch=arch)
+
+        if "resnet" in model_config["Backbone"]:
+            # create the encoders
+            self.encoder = ModelBase(feature_dim=model_config["EMBEDDING_SIZE"], arch=arch)
+            self.encoder_k = ModelBase(feature_dim=model_config["EMBEDDING_SIZE"], arch=arch)
+        else : 
+            self.encoder = MyBackbone()
+            self.encoder_k = MyBackbone()
 
         self.encoder_q_gaussian = GaussianProjection()
         self.encoder_k_gaussian = GaussianProjection()

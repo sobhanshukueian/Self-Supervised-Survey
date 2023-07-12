@@ -24,6 +24,7 @@ model_config = dict(
     WEIGHT_DECAY = 5e-4,
     WARM_UP = 0,
     dataset = "CIFAR10",
+    backbone = "resnet18",
     Description = "MOCO_VAR Implementation "
 )
 

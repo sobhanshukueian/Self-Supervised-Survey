@@ -4,7 +4,6 @@ import os
 # import argparse
 
 
-
 # parser = argparse.ArgumentParser(description='Train MoCo on CIFAR-10')
 
 # parser.add_argument('-a', '--arch', default='resnet18')
@@ -53,7 +52,6 @@ args = parser.parse_args()  # running in command line
 
 
 if __name__ == '__main__':
-
     tmp_save_dir = model_config["SAVE_DIR"]
     temm = 0
 
