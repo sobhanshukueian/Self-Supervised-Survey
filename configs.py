@@ -2,14 +2,14 @@ import torch
 
 # # BYOL Config
 model_config = dict(
-    batch_size=128,
+    batch_size=512,
     show_batch=False,
     show_batch_size=10,
     EPOCHS = 800,
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu',
     SAVE_PLOTS = True,
     VISUALIZE_PLOTS = False,
-    SAVE_DIR = "./moco_var_stl",
+    SAVE_DIR = "./moco_var",
     MODEL_NAME = "MOCO_VAR",
     WEIGHTS = None,
     OPTIMIZER = "AdamW",
@@ -18,13 +18,13 @@ model_config = dict(
     EMBEDDING_SIZE = 128,
     PROJECTION_SIZE = 128,
     RESUME = True,
-    RESUME_DIR= "/kaggle/input/notebook1504b6a2e9/Self-Supervised-Survey/moco_var_stl/weights",
+    RESUME_DIR= "/kaggle/input/self-superised-survey/Self-Supervised-Survey/moco_var/weights",
     MOMENTUM=0.9,
     LEARNING_RATE=0.002,
     WEIGHT_DECAY = 5e-4,
     WARM_UP = 0,
-    dataset = "STL10",
-    Backbone = "dishdiridirin",
+    dataset = "CIFAR10",
+    Backbone = "resnet18",
     Description = "MOCO_VAR Implementation "
 )
 
