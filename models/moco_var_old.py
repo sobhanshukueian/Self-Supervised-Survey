@@ -17,9 +17,9 @@ from models.layers import ModelBase
 import copy
 
 
-class MOCO_VAR_MODEL(nn.Module):
+class MOCO_VAR_OLD_MODEL(nn.Module):
     def __init__(self, K=4096, m=0.99, T=0.1, arch='resnet18'):
-        super(MOCO_VAR_MODEL, self).__init__()
+        super(MOCO_VAR_OLD_MODEL, self).__init__()
 
         self.K = K
         self.m = m
@@ -116,7 +116,7 @@ class MOCO_VAR_MODEL(nn.Module):
             k_mean, k_var = self.encoder_k_gaussian(k)
 
 
-        mean = torch.cat([q_mean, k_mean.detach()], dim=0)
+        mean = torch.cat([q_mean, k_mean], dim=0)
         cos_sim = F.cosine_similarity(mean[:,None,:], mean[None,:,:], dim=-1)
         self_mask = torch.eye(cos_sim.shape[0], dtype=torch.bool, device=cos_sim.device)
         cos_sim.masked_fill_(self_mask, -9e15)

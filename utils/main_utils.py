@@ -22,6 +22,7 @@ from models.simsiam import SimSiam_MODEL
 from models.simsiam_var import SimSiam_VAR_MODEL
 from models.simclr import SimCLR_MODEL
 from models.simclr_var import SimCLR_VAR_MODEL
+from models.moco_var_old import MOCO_VAR_OLD_MODEL
 
 # from MOCOO_model2 import MOCOOOOOOO
 # from MOCOO_model3 import MOCO3
@@ -85,6 +86,8 @@ def get_model(name, conf, resume, save_dir="./", weights=None, device='cpu'):
         model = SimCLR_MODEL()
     elif name == "SimCLR_VAR":
         model = SimCLR_VAR_MODEL()
+    elif name == "MOCO_VAR_OLD":
+        model = MOCO_VAR_OLD_MODEL()
     # if name == "Barlow":
     #     model = Barlow_model()
     # elif name == "byol":
