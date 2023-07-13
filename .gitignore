@@ -8,3 +8,4 @@ __pycache__
 moco_var
 models/__pycache__
 utils/__pycache__
+data/__pycache__
