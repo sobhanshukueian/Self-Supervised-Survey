@@ -2,7 +2,7 @@ import torch
 
 # # BYOL Config
 model_config = dict(
-    batch_size=512,
+    batch_size=128,
     show_batch=False,
     show_batch_size=10,
     EPOCHS = 800,
