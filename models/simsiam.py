@@ -33,10 +33,12 @@ class SimSiam_MODEL(nn.Module):
 
         self.projector = MLP(dim, dim)
 
-        self.encoder = nn.Sequential(
+        '''self.encoder = nn.Sequential(
             self.backbone,
             self.projector
-        )
+        )'''
+
+        self.encoder = self.backbone
 
         # build a 2-layer predictor
         self.predictor = nn.Sequential(nn.Linear(dim, model_config["HIDDEN_SIZE"], bias=False),
@@ -59,9 +61,12 @@ class SimSiam_MODEL(nn.Module):
         # compute features for one view
         z1 = self.encoder(x1) # NxC
         z2 = self.encoder(x2) # NxC
-
-        p1 = self.predictor(z1) # NxC
-        p2 = self.predictor(z2) # NxC
+        #-------------------------------------
+        h1 = self.projector(z1) # NxC
+        h2 = self.projector(z2) # NxC
+        #-------------------------------------
+        p1 = self.predictor(h1) # NxC
+        p2 = self.predictor(h2) # NxC
 
         loss = -(self.criterion(p1, z2.detach()).mean() + self.criterion(p2, z1.detach()).mean()) * 0.5
 
