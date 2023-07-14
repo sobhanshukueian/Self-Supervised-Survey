@@ -2,14 +2,14 @@ import torch
 
 # # BYOL Config
 model_config = dict(
-    batch_size=512,
+    batch_size=128,
     show_batch=False,
     show_batch_size=10,
     EPOCHS = 800,
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu',
     SAVE_PLOTS = True,
     VISUALIZE_PLOTS = False,
-    SAVE_DIR = "./moco_var",
+    SAVE_DIR = "./moco_var_stl",
     MODEL_NAME = "MOCO_VAR",
     WEIGHTS = None,
     OPTIMIZER = "AdamW",
@@ -23,8 +23,8 @@ model_config = dict(
     LEARNING_RATE=0.002,
     WEIGHT_DECAY = 5e-4,
     WARM_UP = 0,
-    dataset = "CIFAR10",
-    Backbone = "resnet18",
+    dataset = "STL10",
+    Backbone = "dishdiridirin",
     Description = "MOCO_VAR Implementation "
 )
 

@@ -67,7 +67,7 @@ class SimSiam_MODEL(nn.Module):
                                         nn.ReLU(inplace=True), # hidden layer
                                         nn.Linear(model_config["HIDDEN_SIZE"], dim)) # output layer
 
-        self.criterion = SimSiamLoss(args.loss_version)
+        self.criterion = SimSiamLoss()
 
     def forward(self, x1, x2, train=False):
         """
