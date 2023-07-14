@@ -71,7 +71,7 @@ def get_optimizer(logger, model_parameters, conf, resume, ckpt, optimizer, lr0=0
     return optim, conf
 
 # Get Model 
-def get_model(name, conf, resume, save_dir="./", weights=None, device='cpu'):
+def get_model(name, conf, resume, resume_dir="./", weights=None, device='cpu'):
     if name == "MOCO":
         model = MOCO_MODEL()
     elif name == "MOCO_VAR":
@@ -124,7 +124,7 @@ def get_model(name, conf, resume, save_dir="./", weights=None, device='cpu'):
 
     if resume:
         # Find the most recent saved checkpoint in search_dir
-        checkpoint_list = glob.glob(f'{save_dir}/**/last*.pt', recursive=True)
+        checkpoint_list = glob.glob(f'{resume_dir}/**/last*.pt', recursive=True)
         checkpoint_path = max(checkpoint_list, key=os.path.getctime) if checkpoint_list else ''
         assert os.path.isfile(checkpoint_path), f'the checkpoint path is not exist: {checkpoint_path}'
         print(f'Resume training from the checkpoint file :{checkpoint_path}')

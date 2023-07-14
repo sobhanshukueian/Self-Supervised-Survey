@@ -31,6 +31,8 @@ from configs import model_config
 from utils.utils import get_color, get_colors, count_parameters, save, adjust_learning_rate, get_params_groups, LinearClassifier, accuracy
 from utils.main_utils import get_optimizer, get_model
 from knn_eval import knn_monitor
+from models.layers import ModelBase
+
 
 
 
@@ -98,13 +100,38 @@ class Linear_Validator:
 
         
         # get model 
-        self.model, self.conf, self.ckpt = get_model(model_config["MODEL_NAME"], self.conf, self.resume, self.resume_dir, self.weights)
-        self.model = self.model.encoder.to(self.device)
+        self.model = ModelBase(feature_dim=model_config["EMBEDDING_SIZE"], arch=model_config["Backbone"]).to(self.device)
+        print(f'Loading state_dict from {model_config["WEIGHTS"]} for fine-tuning...')
+        ckpt = torch.load(model_config["WEIGHTS"])
+        if ckpt:
+            state_dict = ckpt['model'].float().state_dict()
+            model_state_dict = model.state_dict()
+            
+            new_state_dict = dict()
+            for old_key, value in state_dict.items():
+                if old_key.startswith('encoder') and 'fc' not in old_key:
+                    new_key = old_key.replace('encoder.', '')
+                    new_state_dict[new_key] = value
+
+            msg = model.load_state_dict(new_state_dict, strict=False)
+            print(msg)
+            del state_dict, model_state_dict
+        
         self.model = self.model.eval()
 
-        self.linear_classifier = LinearClassifier(model_config["EMBEDDING_SIZE"])
-        self.linear_classifier = self.linear_classifier.to(self.device)
+        linear_classifier = LinearClassifier(model_config["EMBEDDING_SIZE"])
+        linear_classifier = self.linear_classifier.to(self.device)
 
+        self.model.fc = linear_classifier
+
+        for name, param in self.model.named_parameters():
+            if name not in ['fc.weight', 'fc.bias']:
+                param.requires_grad = False
+
+        parameters = list(filter(lambda p: p.requires_grad, model.parameters()))
+    
+
+        print(model)
         #--------------------------------
 
         self.logger = set_logging(self.save_dir, self.model_name)
@@ -116,7 +143,7 @@ class Linear_Validator:
 
         self.conf = count_parameters(self.logger, self.model, self.conf)
 
-        self.optimizer, self.conf = get_optimizer(self.logger, get_params_groups(self.linear_classifier), self.conf, self.resume, self.ckpt, model_config['OPTIMIZER'], lr0=model_config["LEARNING_RATE"], momentum=model_config["MOMENTUM"], weight_decay=model_config["WEIGHT_DECAY"])
+        self.optimizer, self.conf = get_optimizer(self.logger, parameters, self.conf, self.resume, self.ckpt, model_config['OPTIMIZER'], lr0=model_config["LEARNING_RATE"], momentum=model_config["MOMENTUM"], weight_decay=model_config["WEIGHT_DECAY"])
         # self.optimizer = torch.optim.SGD(get_params_groups(self.model), lr=0.06, weight_decay=5e-4, momentum=0.9)
 
         if self.resume:
